@@ -2,13 +2,14 @@
 import json
 import random
 import os
+from tqdm import tqdm
 import shutil
 
 class CocoYoloFormatConvesion:
 
-    def __init__(self, coco_json_path, image_folder, yolo_output_dir):
+    def __init__(self, coco_json_path, coco_image_folder, yolo_output_dir):
         self.coco_json_path = coco_json_path
-        self.image_folder = image_folder
+        self.coco_image_folder = coco_image_folder
         self.yolo_output_dir = yolo_output_dir
 
         for split in ["train", "val"]:
@@ -51,7 +52,7 @@ class CocoYoloFormatConvesion:
 
     def annotation_to_yolo_label(self):
         
-        for annotation in self.annotations:
+        for annotation in tqdm(self.annotations):
 
             image_id = annotation["image_id"]
             category_id = annotation["category_id_3"]  # Adjust according to your dataset
@@ -59,10 +60,6 @@ class CocoYoloFormatConvesion:
 
             image_info = self.image_data[image_id]
             image_width, image_height = image_info["width"], image_info["height"]
-            print("annotation", annotation)
-            print("image_info", image_info)
-
-
 
             # Convert bbox format
             yolo_bbox = self.coco_to_yolo_bbox(image_width, image_height, bbox)
@@ -81,8 +78,8 @@ class CocoYoloFormatConvesion:
             with open(yolo_label_path, "a") as yolo_file:
                 yolo_file.write(f"{category_id} {yolo_bbox}\n")
 
-            # Copy images to corresponding train/val folder (optional)
-            original_image_path = os.path.join(image_folder, image_info["file_name"])
+            # Copy images to the train/val folder
+            original_image_path = os.path.join(coco_image_folder, image_info["file_name"])
             yolo_image_path = os.path.join(yolo_output_dir, split, "images", image_info["file_name"])
             
             if os.path.exists(original_image_path):
@@ -99,8 +96,8 @@ class CocoYoloFormatConvesion:
 if __name__ == "__main__":
 
     coco_json_path = r"..\dataset\origin\quadrant_enumeration_disease\train_quadrant_enumeration_disease.json"
-    image_folder = r"..\dataset\origin\quadrant_enumeration_disease\xrays"
+    coco_image_folder = r"..\dataset\origin\quadrant_enumeration_disease\xrays"
     yolo_output_dir = r"..\dataset\yolo"
 
-    converter = CocoYoloFormatConvesion(coco_json_path, image_folder, yolo_output_dir)
+    converter = CocoYoloFormatConvesion(coco_json_path, coco_image_folder, yolo_output_dir)
     converter.convert()
