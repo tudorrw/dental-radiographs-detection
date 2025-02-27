@@ -1,10 +1,10 @@
-
 import json
 import random
 import os
 from tqdm import tqdm
 import shutil
-
+import numpy as np
+from sklearn.model_selection import train_test_split
 class CocoYoloFormatConvesion:
 
     def __init__(self, coco_json_path, coco_image_folder, yolo_output_dir):
@@ -12,21 +12,24 @@ class CocoYoloFormatConvesion:
         self.coco_image_folder = coco_image_folder
         self.yolo_output_dir = yolo_output_dir
 
-        for split in ["train", "val"]:
-            os.makedirs(os.path.join(yolo_output_dir, split, "labels"), exist_ok=True)
-            os.makedirs(os.path.join(yolo_output_dir, split, "images"), exist_ok=True)
-
         self.coco_data = self.read_raw_json(self.coco_json_path)
         self.image_data = {img["id"]: img for img in self.coco_data["images"]}
         self.annotations = self.coco_data["annotations"]
         
         # Perform train val split function
+        self.create_output_dir()
         self.train_val_split()
 
     def read_raw_json(self, file_path):
         with open(file_path) as json_data:
             data = json.load(json_data)
         return data
+    
+    def create_output_dir(self):
+        for split in ["train", "val"]:
+            os.makedirs(os.path.join(yolo_output_dir, split, "labels"), exist_ok=True)
+            os.makedirs(os.path.join(yolo_output_dir, split, "images"), exist_ok=True)
+
     
     def coco_to_yolo_bbox(self, image_width, image_height, bbox):
         x_min, y_min, bbox_width, bbox_height = bbox
@@ -89,7 +92,6 @@ class CocoYoloFormatConvesion:
         print("Starting the conversion process")
         self.annotation_to_yolo_label()
         print("Conversion process completed")
-
 
 
 
