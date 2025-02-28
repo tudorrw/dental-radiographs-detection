@@ -11,16 +11,3 @@ names:
   1: Caries
   2: Periapical Lesion
   3: Deep Caries
-
-# Class weights to reduce false positives for Caries (lower weight)
-weights: [1.0, 0.7, 1.5, 1.5]
-
-
-# #improve
-augmentations:
-  contrast: 0.5  # Increases contrast to make lesions clearer
-  sharpen: 0.2   # Enhances edges for better feature extraction
-  noise: 0.1     # Adds slight noise to avoid overfitting
-  cutout: 0.2    # Simulates missing parts of X-rays
-  flipud: 0.1
-  fliplr: 0.5

@@ -149,6 +149,6 @@ if __name__ == "__main__":
     yolo_output_dir = r"../dataset/yolo"
 
     converter = StratifiedCocoToYolo(coco_json_path, coco_image_folder, yolo_output_dir, val_size=0.2)
-    converter.perform_stratified_split()
+    # converter.perform_stratified_split()
     converter.display_class_distribution()
 
