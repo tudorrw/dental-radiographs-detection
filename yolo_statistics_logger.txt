@@ -1,6 +1,0 @@
-1st train - epochs: 10, on imgz: 512px, batch_size:2 without custom model architecture
-2nd train - epochs: 10, on imgz: 512px, batch_size:2 with custom model architecture (configs/yolo/yolov11.yaml)
-3rd train - epochs: 10, on imgz: 640px, batch_size:4 with custom model architecture (configs/yolo/yolov11.yaml)
-4th train - epochs: 100, on imgz: 640px, batch_size:16 with custom model architecture (configs/yolo/yolov11.yaml)
-re-shuffle the training data and validation data
-5th train - epochs: 100, on imgz: 640px, batch_size:16 with custom model architecture (configs/yolo/yolov11.yaml) and augmentations in (configs/yolo/teeth_diagnosis.yaml)
