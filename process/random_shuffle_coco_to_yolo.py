@@ -97,9 +97,9 @@ class CocoYoloFormatConvesion:
 
 if __name__ == "__main__":
 
-    coco_json_path = r"..\dataset\origin\quadrant_enumeration_disease\train_quadrant_enumeration_disease.json"
-    coco_image_folder = r"..\dataset\origin\quadrant_enumeration_disease\xrays"
-    yolo_output_dir = r"..\dataset\yolo"
+    coco_json_path = r"..\datasets\origin\quadrant_enumeration_disease\train_quadrant_enumeration_disease.json"
+    coco_image_folder = r"..\datasets\origin\quadrant_enumeration_disease\xrays"
+    yolo_output_dir = r"..\datasets\yolo"
 
     converter = CocoYoloFormatConvesion(coco_json_path, coco_image_folder, yolo_output_dir)
     converter.convert()
