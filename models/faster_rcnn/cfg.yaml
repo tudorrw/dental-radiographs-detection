@@ -1,0 +1,8 @@
+image_dir: datasets/coco
+checkpoints_path: checkpoints/
+max_epochs: 50
+batch_size: 4
+learning_rate: 1e-4
+data_type: quadrant_enumeration
+n_teeth: 32
+target_size: [1536, 3139]
