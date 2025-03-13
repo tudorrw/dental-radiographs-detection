@@ -1,12 +1,11 @@
 import json
 import pandas as pd
 import os
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 from sklearn.model_selection import train_test_split
 
-# Convert COCO bbox format (x, y, w, h) → (x_min, y_min, x_max, y_max)
+# Convert COCO bbox format to Pascal VOC format (x, y, w, h) → (x_min, y_min, x_max, y_max)
 def xywh_to_xyxy(bbox):
-    return [bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3]]
+    return [bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3]] 
 
 # Process dataset: Nest annotations inside images
 def nest_ann_into_images(dataset):
@@ -28,9 +27,17 @@ def get_train_val_test_split(data):
 
     return train_data, val_data, test_data
 
+
+def flatten_annotations(data):
+    rows = []
+    for img in data:
+        for ann in img["annotations"]:
+            rows.append({"image_id": img["id"], "bbox": ann["bbox"]})
+    return pd.DataFrame(rows)
+
 if __name__ == "__main__":
     dataset_types = ["quadrant_enumeration", "quadrant_enumeration_disease"]
-    base_path = "../datasets/coco/"
+    base_path = "datasets/coco/"
 
     for dataset_type in dataset_types:
         with open(os.path.join(base_path, f"{dataset_type}/train_{dataset_type}.json")) as f:
@@ -49,4 +56,14 @@ if __name__ == "__main__":
         val_df.to_csv(os.path.join(base_path, f"{dataset_type}/{dataset_type}_val.csv"), index=False)
         test_df.to_csv(os.path.join(base_path, f"{dataset_type}/{dataset_type}_test.csv"), index=False)
 
-        print(f"✅ {dataset_type}: Train/Val/Test split completed & saved as CSV")
+        print("Train/Val/Test split completed")
+
+        # Compute statistics
+        train_ann_df = flatten_annotations(train_data)
+        val_ann_df = flatten_annotations(val_data)
+        test_ann_df = flatten_annotations(test_data)
+
+        print(f"Train: {train_ann_df['image_id'].nunique()} unique images, {train_ann_df.shape[0]} bboxes")
+        print(f"Val: {val_ann_df['image_id'].nunique()} unique images, {val_ann_df.shape[0]} bboxes")
+        print(f"Test: {test_ann_df['image_id'].nunique()} unique images, {test_ann_df.shape[0]} bboxes")
+

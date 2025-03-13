@@ -18,10 +18,10 @@ class ToothLabelMapper:
             list: A list of valid tooth labels.
         """
         background = [0]  # Background class
-        quadrant1 = (np.arange(1, 9) + 10)[::-1]  # Quadrant 1 (Teeth 18 → 11)
-        quadrant2 = np.arange(1, 9)               # Quadrant 2 (Teeth 21 → 28)
-        quadrant3 = (np.arange(1, 9) + 30)[::-1]  # Quadrant 3 (Teeth 48 → 41)
-        quadrant4 = np.arange(1, 9) + 20          # Quadrant 4 (Teeth 31 → 38)
+        quadrant1 = (np.arange(1, 9) + 10)[::-1]  # Quadrant 1 (upper left) (Teeth 18 → 11) teeth from 9 to 16
+        quadrant2 = np.arange(1, 9)               # Quadrant 2 (upper right) (Teeth 21 → 28) teeth from 8 to 1
+        quadrant3 = (np.arange(1, 9) + 30)[::-1]  # Quadrant 3 (lower right) (Teeth 48 → 41) teeth from 25 to 32
+        quadrant4 = np.arange(1, 9) + 20          # Quadrant 4 (lower left) (Teeth 31 → 38) teeth from 24 to 17
 
         return background + quadrant1.tolist() + quadrant2.tolist() + quadrant3.tolist() + quadrant4.tolist()
 
