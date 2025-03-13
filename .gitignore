@@ -1,5 +1,6 @@
 checkpoints
-commands.sh
 teeth-yolov11-venv
-dataset
+datasets
 runs
+tb_logs
+**/__pycache__
