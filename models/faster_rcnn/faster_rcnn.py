@@ -1,29 +1,43 @@
 import torch
 import pytorch_lightning as L
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
-from torchvision.models.detection import fasterrcnn_resnet50_fpn
-from torchvision.models.detection import FasterRCNN_ResNet50_FPN_Weights
+from torchvision.models.detection import fasterrcnn_resnet50_fpn, FasterRCNN_ResNet50_FPN_Weights
+
 import matplotlib.pyplot as plt
-from torchmetrics import Accuracy
+from torchmetrics.detection.mean_ap import MeanAveragePrecision
+from torchmetrics.classification import MulticlassConfusionMatrix
 import seaborn as sns
-from sklearn.metrics import confusion_matrix
 
+'''
+Faster R-CNN processes the image:
 
+It generates multiple region proposals (potential teeth locations).
+Each proposal is assigned a class label (or "background" if it's not an object).
+It makes multiple predictions per image:
+
+It detects many bounding boxes, sometimes overlapping.
+Each prediction comes with a confidence score and a label.
+You only have 32 ground-truth labels:
+
+The dataset annotates up to 32 teeth per image.
+However, Faster R-CNN is making many more predictions because it's finding multiple candidate teeth.
+
+'''
 class FasterRCNN(L.LightningModule):
-    def __init__(self, num_classes, lr):
-        super().__init__()
+    def __init__(self, num_classes, learning_rate, momentum):
+        super(FasterRCNN, self).__init__()
+
         self.save_hyperparameters()
+        self.num_classes = num_classes
+        self.learning_rate = learning_rate
+        self.momentum = momentum
         
-        self.model = fasterrcnn_resnet50_fpn(weights=FasterRCNN_ResNet50_FPN_Weights.DEFAULT)
+        self.model = fasterrcnn_resnet50_fpn(weights=FasterRCNN_ResNet50_FPN_Weights.COCO_V1)
         in_features = self.model.roi_heads.box_predictor.cls_score.in_features
-        self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes=num_classes)
-        self.lr = lr
+        self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes=self.num_classes)
 
-        self.accuracy = Accuracy(task="multiclass", num_classes=num_classes)
-
-        self.val_preds = []
-        self.val_labels = []
-
+        self.metric = MeanAveragePrecision(box_format="xyxy")
+        self.confmatrix = MulticlassConfusionMatrix(num_classes=self.num_classes)
 
 
     def forward(self, images, targets=None):
@@ -31,82 +45,67 @@ class FasterRCNN(L.LightningModule):
 
     def training_step(self, batch, batch_idx):
         images, targets = batch
+
+        targets=[{k: v for k, v in t.items()} for t in targets]
+
         loss_dict = self.forward(images, targets)
+
         total_loss = sum(loss for loss in loss_dict.values())
         self.log("train_loss", total_loss)
+    
         return total_loss
     
     
+
+    # Trainer adds torch.no_grad() for the validation loop, so anyrhing in the validation_step() method will be already with gradients disabled
     def validation_step(self, batch, batch_idx):
         images, targets = batch
+        # print("Targets: ", targets)
+        # print("Images: ", images)
 
         # Set model in training mode to get access to losses
-        self.model.train()
+        self.model.train() # imputs ran
         loss_dict = self.forward(images, targets)
         total_loss = sum(loss for loss in loss_dict.values())
         self.model.eval()
+        predictions = self.model(images)
+        # print("Targets: ", targets)
+        # print("Predictions: ", predictions)
+        # Set model in eval mode to obtain predictions
+        pred_labels = torch.cat([pred["labels"] for pred in predictions], dim=0)
+        true_labels = torch.cat([t["labels"] for t in targets], dim=0)
+        # self.confmatrix(preds=pred_labels, target=true_labels)
+        # self.confmatrix.update(preds=predictions, target=targets)
+        # print("Pred labeld: ", pred_labels, "true labels: ", true_labels)
+
+        self.metric.update(preds=predictions, target=targets)
         self.log("val_loss", total_loss)
-
-        # for confusion matrix
-        # predictions = self.model(images)
-
-        # # Lists to hold aligned predictions and targets
-        # y_preds_list = []
-        # y_true_list = []
-
-        # for pred, target in zip(predictions, targets):
-        #     y_pred = pred["labels"].cpu()
-        #     y_true = target["labels"].cpu()
-
-        #     # Ensure the number of predictions per image matches the ground truth
-        #     y_preds_list.append(y_pred)
-        #     y_true_list.append(y_true)
-
-        # # Only log and store when valid matches exist
-        # if y_preds_list and y_true_list:
-        #     y_preds = torch.cat(y_preds_list)
-        #     y_true = torch.cat(y_true_list)
-
-        #     # Compute accuracy
-        #     acc = self.accuracy(y_preds, y_true)
-        #     self.log("val_acc", acc, batch_size=len(images))
-
-        #     # Store for confusion matrix
-        #     self.val_preds.append(y_preds)
-        #     self.val_labels.append(y_true)
-
 
         return total_loss
     
-    # def on_validation_epoch_end(self):
-    #     """Compute confusion matrix at the end of validation"""
-    #     if len(self.val_preds) > 0 and len(self.val_labels) > 0:
-    #         # Flatten lists
-    #         val_preds = torch.cat(self.val_preds).cpu().numpy()
-    #         val_labels = torch.cat(self.val_labels).cpu().numpy()
+    def on_validation_epoch_end(self):
+        computed_metrics = self.metric.compute()
+    
+        # Filter out keys that start with "mar_" and the "classes" key
+        filtered_metrics = {k: v for k, v in computed_metrics.items() if not k.startswith("mar_") and not k == "classes"}
+        for k, v in filtered_metrics.items():
+            self.log(f"val_{k}", v)
 
-    #         # Compute confusion matrix
-    #         cm = confusion_matrix(val_labels, val_preds)
+        self.metric.reset()
+        # fig, ax = self.plot_confusion_matrix()
+        # self.logger.experiment.add_figure("Confusion Matrix", fig, self.current_epoch)
 
-    #         # Plot and log to TensorBoard
-    #         fig = self.plot_confusion_matrix(cm)
-    #         self.logger.experiment.add_figure("Confusion Matrix", fig, self.current_epoch)
 
-    #         # Reset stored predictions and labels for the next epoch
-    #         self.val_preds.clear()
-    #         self.val_labels.clear()
-
-    # def plot_confusion_matrix(self, cm):
-    #     """Helper function to plot confusion matrix"""
+    # def plot_confusion_matrix(self):
+    #     """Generate confusion matrix plot."""
     #     fig, ax = plt.subplots(figsize=(10, 8))
+    #     cm = self.confmatrix.compute().cpu().numpy()
     #     sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
     #     ax.set_xlabel("Predicted Labels")
     #     ax.set_ylabel("True Labels")
     #     ax.set_title("Confusion Matrix")
     #     plt.close(fig)
-    #     return fig
-
-    
+    #     return fig, ax
 
     def configure_optimizers(self):
-        return torch.optim.SGD(self.model.parameters(), lr=self.lr)
+        return torch.optim.SGD(self.model.parameters(), lr=self.learning_rate, momentum=self.momentum)
