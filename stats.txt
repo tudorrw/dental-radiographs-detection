@@ -1,0 +1,3 @@
+Train: 475 unique images, 13539 bboxes
+Val: 95 unique images, 2755 bboxes
+Test: 64 unique images, 1801 bboxes
