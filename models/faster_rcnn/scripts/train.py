@@ -27,12 +27,12 @@ if __name__ == "__main__":
 
     # Load datasets
     train_dataset = TeethDataset(
-        csv_path=f"{config['image_dir']}/{config['data_type']}/quadrant_enumeration_train.csv",
+        csv_path=f"{config['image_dir']}/{config['data_type']}/quadrant_enumeration_voc_train.csv",
         image_dir=f"{config['image_dir']}/{config['data_type']}/xrays", 
         dataset_type="train"
     )
     val_dataset = TeethDataset(
-        csv_path=f"{config['image_dir']}/{config['data_type']}/quadrant_enumeration_val.csv",
+        csv_path=f"{config['image_dir']}/{config['data_type']}/quadrant_enumeration_voc_val.csv",
         image_dir=f"{config['image_dir']}/{config['data_type']}/xrays",
         dataset_type="val"
     )
