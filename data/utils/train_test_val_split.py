@@ -12,19 +12,43 @@ def process_voc_data(dataset, image_ids):
     images = []
     for image in dataset["images"]:
         if image["id"] in image_ids:
-            annotations = [ann for ann in dataset["annotations"] if ann["image_id"] == image["id"]]
-            for ann in annotations:
-                ann["bbox"] = xywh_to_xyxy(ann["bbox"])  # Convert bbox format for VOC
-            image["annotations"] = annotations  # Nest annotations inside images
-            images.append(image)
+            # Create deep copies of annotations for this image
+            annotations = []
+            for original_ann in dataset["annotations"]:
+                if original_ann["image_id"] == image["id"]:
+                    # Create a copy of the annotation
+                    ann = original_ann.copy()
+                    # Create a copy of the bbox and convert it to VOC format
+                    bbox_copy = ann["bbox"].copy() if isinstance(ann["bbox"], list) else ann["bbox"]
+                    ann["bbox"] = xywh_to_xyxy(bbox_copy)
+                    annotations.append(ann)
+            
+            # Create a copy of the image
+            image_copy = image.copy()
+            # Add annotations to the image copy
+            image_copy["annotations"] = annotations
+            images.append(image_copy)
     return images
  
 # Process dataset for COCO (Keeps images and annotations separate)
 def process_coco_data(dataset, image_ids):
-    images = [img for img in dataset["images"] if img["id"] in image_ids]
-    annotations = [ann for ann in dataset["annotations"] if ann["image_id"] in image_ids]
-    categories_1 = dataset.get("categories_1", [])
-    categories_2 = dataset.get("categories_2", [])
+    # Create deep copies of images and annotations to avoid modifying the original dataset
+    images = [img.copy() for img in dataset["images"] if img["id"] in image_ids]
+    
+    annotations = []
+    for original_ann in dataset["annotations"]:
+        if original_ann["image_id"] in image_ids:
+            # Create a deep copy of the annotation
+            ann = original_ann.copy()
+            # Create a deep copy of the bbox to avoid modifying the original
+            if "bbox" in ann:
+                ann["bbox"] = ann["bbox"].copy() if isinstance(ann["bbox"], list) else ann["bbox"]
+            annotations.append(ann)
+    
+    # Create deep copies of category lists
+    categories_1 = [cat.copy() for cat in dataset.get("categories_1", [])]
+    categories_2 = [cat.copy() for cat in dataset.get("categories_2", [])]
+    
     return images, annotations, categories_1, categories_2
 
 # Compute statistics
@@ -35,17 +59,18 @@ def flatten_annotations(data):
             rows.append({"image_id": img["id"], "bbox": ann["bbox"]})
     return pd.DataFrame(rows)
  
-# Save dataset in COCO JSON format (Single File)
+# Save dataset in COCO JSON format (Single File) without duplicate annotations
 def save_coco_json(images, annotations, categories_1, categories_2, dataset, save_path):
     dataset_copy = dataset.copy()
+    
+    # Ensure images don't already contain annotations
     clean_images = []
-    # for some reason, the images have had nested annotations, therefore they appeared twice in the JSON
     for img in images:
         clean_img = img.copy()
         if "annotations" in clean_img:
             del clean_img["annotations"]
         clean_images.append(clean_img)
-
+    
     dataset_copy["images"] = clean_images
     dataset_copy["annotations"] = annotations
     dataset_copy["categories_1"] = categories_1
@@ -67,8 +92,8 @@ def main():
         
         # Split image IDs first to ensure VOC and COCO use the same splits
         all_image_ids = [img["id"] for img in dataset["images"]]
-        train_ids, temp_ids = train_test_split(all_image_ids, test_size=0.25, random_state=42) #75% train
-        val_ids, test_ids = train_test_split(temp_ids, test_size=0.4, random_state=42) # 0.6 * 25 = 15% val, 10% test
+        train_ids, temp_ids = train_test_split(all_image_ids, test_size=0.25, random_state=42)
+        val_ids, test_ids = train_test_split(temp_ids, test_size=0.4, random_state=42)
         
         # Convert to sets for faster lookups
         train_id_set = set(train_ids)
