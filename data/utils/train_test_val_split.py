@@ -26,13 +26,7 @@ def process_coco_data(dataset, image_ids):
     categories_1 = dataset.get("categories_1", [])
     categories_2 = dataset.get("categories_2", [])
     return images, annotations, categories_1, categories_2
- 
-# Split dataset into train/val/test
-def get_train_val_test_split(data, train_ratio=0.75, val_ratio=0.15, test_ratio=0.10):
-    train_data, temp_data = train_test_split(data, test_size=(1 - train_ratio), random_state=42)
-    val_data, test_data = train_test_split(temp_data, test_size=test_ratio / (test_ratio + val_ratio), random_state=42)
-    return train_data, val_data, test_data
- 
+
 # Compute statistics
 def flatten_annotations(data):
     rows = []
@@ -44,7 +38,15 @@ def flatten_annotations(data):
 # Save dataset in COCO JSON format (Single File)
 def save_coco_json(images, annotations, categories_1, categories_2, dataset, save_path):
     dataset_copy = dataset.copy()
-    dataset_copy["images"] = images
+    clean_images = []
+    # for some reason, the images have had nested annotations, therefore they appeared twice in the JSON
+    for img in images:
+        clean_img = img.copy()
+        if "annotations" in clean_img:
+            del clean_img["annotations"]
+        clean_images.append(clean_img)
+
+    dataset_copy["images"] = clean_images
     dataset_copy["annotations"] = annotations
     dataset_copy["categories_1"] = categories_1
     dataset_copy["categories_2"] = categories_2
