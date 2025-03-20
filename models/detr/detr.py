@@ -61,14 +61,15 @@ class DETR(pl.LightningModule):
         loss_dict = outputs.loss_dict
 
         # increase loss for the upper teeth - has an improvement to the conf matrix
-        if self.training and self.use_weighted_loss:
-            for label_dict in labels:
-                if 'class_labels' in label_dict:
-                    class_labels = label_dict['class_labels']
-                    upper_teeth_mask = (class_labels >= 1) & (class_labels <= 16)
-                    if upper_teeth_mask.any():
-                        loss = loss * 1.5
-                        break
+        # if self.training and self.use_weighted_loss:
+        #     for label_dict in labels:
+        #         if 'class_labels' in label_dict:
+        #             class_labels = label_dict['class_labels']
+        #             #gives more weight to samples containing upper teeth, i think all images
+        #             upper_teeth_mask = (class_labels >= 1) & (class_labels <= 16)
+        #             if upper_teeth_mask.any():
+        #                 loss = loss * 1.5
+        #                 break
             
 
         return loss, loss_dict

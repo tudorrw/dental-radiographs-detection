@@ -29,14 +29,16 @@ if __name__ == "__main__":
     
     # Load datasets using COCO JSON files
     train_dataset = CocoDetectionTeeth(
-        json_path=f"{config['image_dir']}/{config['data_type']}/{config['data_type']}_coco_train.json",
+        json_path=f"{config['csv_path']}/{config['data_type']}/{config['data_type']}_coco_train.json",
         image_dir=f"{config['image_dir']}/{config['data_type']}/xrays",
-        processor=processor
+        processor=processor,
+        train_mode = True
     )
     val_dataset = CocoDetectionTeeth(
-        json_path=f"{config['image_dir']}/{config['data_type']}/{config['data_type']}_coco_val.json",
+        json_path=f"{config['csv_path']}/{config['data_type']}/{config['data_type']}_coco_val.json",
         image_dir=f"{config['image_dir']}/{config['data_type']}/xrays",
-        processor=processor
+        processor=processor,
+        train_mode = False
     )
 
  
@@ -63,7 +65,8 @@ if __name__ == "__main__":
     model = DETR(
         num_classes=config["num_classes"],
         learning_rate=float(config["learning_rate"]),
-        weight_decay=float(config.get("weight_decay", 1e-4))
+        weight_decay=float(config["weight_decay"]),
+        use_weighted_loss=True
     )
  
     # Logger & Checkpoints with versioning
@@ -80,7 +83,7 @@ if __name__ == "__main__":
         mode="min",
         save_top_k=2,
         save_last=True,
-        filename="detr-epoch{epoch:02d}-val_loss{val_loss:.4f}"
+        filename="epoch{epoch:02d}-val_loss{val_loss:.4f}"
     )
     
     lr_monitor = LearningRateMonitor(logging_interval="epoch")
