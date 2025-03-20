@@ -1,12 +1,23 @@
 import json
 import pandas as pd
 import os
+import shutil
 from sklearn.model_selection import train_test_split
- 
+from utils.mapper import ToothLabelMapper
+
 # Convert COCO bbox format (x, y, w, h) → Pascal VOC format (x_min, y_min, x_max, y_max)
 def xywh_to_xyxy(bbox):
     return [bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3]]
  
+def xywh_to_xcycwh(image_width, image_height, bbox):
+    x_center = (bbox[0] + bbox[2] / 2.0) / image_width
+    y_center = (bbox[1] + bbox[3] / 2.0) / image_height
+    w = bbox[2] / image_width
+    h = bbox[3] / image_height
+    return f"{x_center:.6f} {y_center:.6f} {w:.6f} {h:.6f}"
+
+
+
 # Process dataset for VOC (Nests annotations inside images)
 def process_voc_data(dataset, image_ids):
     images = []
@@ -31,7 +42,7 @@ def process_voc_data(dataset, image_ids):
     return images
  
 # Process dataset for COCO (Keeps images and annotations separate)
-def process_coco_data(dataset, image_ids):
+def process_coco_data_quadrant_emun(dataset, image_ids):
     # Create deep copies of images and annotations to avoid modifying the original dataset
     images = [img.copy() for img in dataset["images"] if img["id"] in image_ids]
     
@@ -51,6 +62,82 @@ def process_coco_data(dataset, image_ids):
     
     return images, annotations, categories_1, categories_2
 
+
+
+def process_coco_data_quadrant(dataset, image_ids):
+    # Create deep copies of images and annotations to avoid modifying the original dataset
+    images = [img.copy() for img in dataset["images"] if img["id"] in image_ids]
+    
+    annotations = []
+    for original_ann in dataset["annotations"]:
+        if original_ann["image_id"] in image_ids:
+            # Create a deep copy of the annotation
+            ann = original_ann.copy()
+            # Create a deep copy of the bbox to avoid modifying the original
+            if "bbox" in ann:
+                ann["bbox"] = ann["bbox"].copy() if isinstance(ann["bbox"], list) else ann["bbox"]
+            annotations.append(ann)
+    
+    # Create deep copies of category lists
+    categories = [cat.copy() for cat in dataset.get("categories", [])]
+    
+    return images, annotations, categories
+
+
+
+
+# Process COCO to YOLO conversion
+def process_yolo_data(dataset, image_ids, origin_path, dataset_type, output_dir):
+    # Create YOLO directories for labels only (images will stay in origin)
+    for split in ["train", "val", "test"]:
+        os.makedirs(os.path.join(output_dir, split, "images"), exist_ok=True)
+        os.makedirs(os.path.join(output_dir, split, "labels"), exist_ok=True)
+
+    label_mapper = ToothLabelMapper()  
+    
+    # Process for each split
+    for split, split_ids in [("train", train_id_set), ("val", val_id_set), ("test", test_id_set)]:
+        labels_dir = os.path.join(output_dir, split, "labels")
+        images_dir = os.path.join(output_dir, split, "images")
+
+        for img_id in split_ids:
+            # Get image information
+            image_info = next((img for img in dataset["images"] if img["id"] == img_id), None)
+            if not image_info:
+                continue
+                
+            image_width, image_height = image_info["width"], image_info["height"]
+            image_filename = image_info["file_name"]
+            
+            src_image_path = os.path.join(origin_path, dataset_type, "xrays", image_filename)
+            dst_image_path = os.path.join(images_dir, image_filename)
+            if not os.path.exists(dst_image_path):
+                shutil.copy2(src_image_path, dst_image_path)
+            # Create YOLO label file
+            label_filename = os.path.splitext(image_filename)[0] + ".txt"
+            label_path = os.path.join(labels_dir, label_filename)
+            
+            with open(label_path, "w") as f:
+                for ann in dataset["annotations"]:
+                    if ann["image_id"] == img_id:
+                        # Get category ID and convert to YOLO class ID
+                        category_id_1 = ann["category_id_1"]
+                        category_id_2 = ann["category_id_2"]
+                        tooth_id = category_id_1 * 10 + category_id_2 + 1
+                        mapped_class_id = int(label_mapper.encode([tooth_id])[0])
+
+                        # Convert bbox to YOLO format
+                        bbox = ann["bbox"]
+                        yolo_bbox = xywh_to_xcycwh(image_width, image_height, bbox)
+                        
+                        # Write to file (class_id x_center y_center width height)
+                        f.write(f"{mapped_class_id} {yolo_bbox}\n")  # Subtract 1 for 0-indexed classes in YOLO
+                        
+    print(f"[YOLO] Train/Val/Test labels saved for {dataset_type} in {output_dir}")
+ 
+
+
+
 # Compute statistics
 def flatten_annotations(data):
     rows = []
@@ -60,18 +147,10 @@ def flatten_annotations(data):
     return pd.DataFrame(rows)
  
 # Save dataset in COCO JSON format (Single File) without duplicate annotations
-def save_coco_json(images, annotations, categories_1, categories_2, dataset, save_path):
+def save_coco_json_quadrant_enum(images, annotations, categories_1, categories_2, dataset, save_path):
     dataset_copy = dataset.copy()
-    
-    # Ensure images don't already contain annotations
-    clean_images = []
-    for img in images:
-        clean_img = img.copy()
-        if "annotations" in clean_img:
-            del clean_img["annotations"]
-        clean_images.append(clean_img)
-    
-    dataset_copy["images"] = clean_images
+
+    dataset_copy["images"] = images
     dataset_copy["annotations"] = annotations
     dataset_copy["categories_1"] = categories_1
     dataset_copy["categories_2"] = categories_2
@@ -79,26 +158,51 @@ def save_coco_json(images, annotations, categories_1, categories_2, dataset, sav
     with open(save_path, "w") as f:
         json.dump(dataset_copy, f, indent=4)
  
+
+def save_coco_json_quadrant(images, annotations, categories, dataset, save_path):
+    dataset_copy = dataset.copy()
+
+    dataset_copy["images"] = images
+    dataset_copy["annotations"] = annotations
+    dataset_copy["categories"] = categories
+ 
+    with open(save_path, "w") as f:
+        json.dump(dataset_copy, f, indent=4)
+ 
+
 # Main function
 def main():
-    dataset_types = ["quadrant_enumeration", "quadrant_enumeration_disease"]
-    base_path = "datasets/coco/"
+    
+    dataset_types = ["quadrant", "quadrant_enumeration"]
+    global train_id_set, val_id_set, test_id_set
+    origin_path = "dataset/origin/"
+    coco_base_path = "dataset/coco/"
+    pascal_voc_base_path = "dataset/pascal_voc/"
+    yolo_base_path = "dataset/yolo/"
+
+    for path in [coco_base_path, pascal_voc_base_path, yolo_base_path]:
+        os.makedirs(path, exist_ok=True)
  
     for dataset_type in dataset_types:
-        json_path = os.path.join(base_path, f"{dataset_type}/train_{dataset_type}.json")
+        os.makedirs(os.path.join(coco_base_path, dataset_type), exist_ok=True)
+        os.makedirs(os.path.join(pascal_voc_base_path, dataset_type), exist_ok=True)
+
+    for dataset_type in dataset_types:
+        json_path = os.path.join(origin_path, f"{dataset_type}/train_{dataset_type}.json")
  
         with open(json_path) as f:
             dataset = json.load(f)
-        
-        # Split image IDs first to ensure VOC and COCO use the same splits
+
+                # Split image IDs first to ensure VOC and COCO use the same splits
         all_image_ids = [img["id"] for img in dataset["images"]]
         train_ids, temp_ids = train_test_split(all_image_ids, test_size=0.25, random_state=42)
         val_ids, test_ids = train_test_split(temp_ids, test_size=0.4, random_state=42)
-        
+
         # Convert to sets for faster lookups
         train_id_set = set(train_ids)
         val_id_set = set(val_ids)
         test_id_set = set(test_ids)
+    
         
         # Process and save VOC format
         train_voc_data = process_voc_data(dataset, train_id_set)
@@ -110,27 +214,49 @@ def main():
         val_df = pd.DataFrame(val_voc_data)
         test_df = pd.DataFrame(test_voc_data)
         
-        train_df.to_csv(os.path.join(base_path, f"{dataset_type}/{dataset_type}_voc_train.csv"), index=False)
-        val_df.to_csv(os.path.join(base_path, f"{dataset_type}/{dataset_type}_voc_val.csv"), index=False)
-        test_df.to_csv(os.path.join(base_path, f"{dataset_type}/{dataset_type}_voc_test.csv"), index=False)
+        train_df.to_csv(os.path.join(pascal_voc_base_path, f"{dataset_type}/{dataset_type}_voc_train.csv"), index=False)
+        val_df.to_csv(os.path.join(pascal_voc_base_path, f"{dataset_type}/{dataset_type}_voc_val.csv"), index=False)
+        test_df.to_csv(os.path.join(pascal_voc_base_path, f"{dataset_type}/{dataset_type}_voc_test.csv"), index=False)
         print(f"[VOC] Train/Val/Test CSV saved for {dataset_type}.")
         
         # Process and save COCO format
-        train_images, train_annotations, categories_1, categories_2 = process_coco_data(dataset, train_id_set)
-        val_images, val_annotations, _, _ = process_coco_data(dataset, val_id_set)
-        test_images, test_annotations, _, _ = process_coco_data(dataset, test_id_set)
-        
+        if(dataset_type == "quadrant"):
+            train_images, train_annotations, categories = process_coco_data_quadrant(dataset, train_id_set)
+            val_images, val_annotations, _ = process_coco_data_quadrant(dataset, val_id_set)
+            test_images, test_annotations, _ = process_coco_data_quadrant(dataset, test_id_set)
+            
         # Save COCO JSON
-        save_coco_json(train_images, train_annotations, categories_1, categories_2, dataset,
-                      os.path.join(base_path, f"{dataset_type}/{dataset_type}_coco_train.json"))
+            save_coco_json_quadrant(train_images, train_annotations, categories, dataset,
+                        os.path.join(coco_base_path, f"{dataset_type}/{dataset_type}_coco_train.json"))
+            
+            save_coco_json_quadrant(val_images, val_annotations, categories, dataset,
+                        os.path.join(coco_base_path, f"{dataset_type}/{dataset_type}_coco_val.json"))
+            
+            save_coco_json_quadrant(test_images, test_annotations, categories, dataset,
+                        os.path.join(coco_base_path, f"{dataset_type}/{dataset_type}_coco_test.json"))
         
-        save_coco_json(val_images, val_annotations, categories_1, categories_2, dataset,
-                      os.path.join(base_path, f"{dataset_type}/{dataset_type}_coco_val.json"))
-        
-        save_coco_json(test_images, test_annotations, categories_1, categories_2, dataset,
-                      os.path.join(base_path, f"{dataset_type}/{dataset_type}_coco_test.json"))
+
+        if(dataset_type == "quadrant_enumeration"):
+            train_images, train_annotations, categories_1, categories_2 = process_coco_data_quadrant_emun(dataset, train_id_set)
+            val_images, val_annotations, _, _ = process_coco_data_quadrant_emun(dataset, val_id_set)
+            test_images, test_annotations, _, _ = process_coco_data_quadrant_emun(dataset, test_id_set)
+            
+        # Save COCO JSON
+            save_coco_json_quadrant_enum(train_images, train_annotations, categories_1, categories_2, dataset,
+                        os.path.join(coco_base_path, f"{dataset_type}/{dataset_type}_coco_train.json"))
+            
+            save_coco_json_quadrant_enum(val_images, val_annotations, categories_1, categories_2, dataset,
+                        os.path.join(coco_base_path, f"{dataset_type}/{dataset_type}_coco_val.json"))
+            
+            save_coco_json_quadrant_enum(test_images, test_annotations, categories_1, categories_2, dataset,
+                        os.path.join(coco_base_path, f"{dataset_type}/{dataset_type}_coco_test.json"))
         
         print(f"[COCO] Train/Val/Test JSON saved for {dataset_type}.")
+
+
+        if dataset_type == "quadrant_enumeration":
+            process_yolo_data(dataset, all_image_ids, origin_path, dataset_type, yolo_base_path)
+
         
         # Compute and print statistics
         train_ann_df = flatten_annotations(train_voc_data)
