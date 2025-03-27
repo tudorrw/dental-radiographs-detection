@@ -1,7 +1,8 @@
 import torch
 import numpy as np
 import pytorch_lightning as pl
-from transformers import DetrForObjectDetection, DetrImageProcessor
+from transformers import DetrForObjectDetection, AutoModelForObjectDetection
+
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -24,19 +25,15 @@ class DETR(pl.LightningModule):
             num_labels=self.num_classes,
             ignore_mismatched_sizes=True
         )
-       
+
+        self.id2label = {i: f"Class {i}" for i in range(self.num_classes+1)}  # +1 for background
+
         # Metrics
         self.metric = MeanAveragePrecision(box_format="xywh")
         
         # For confusion matrix
         self.val_pred_labels = []
         self.val_true_labels = []
-        
-        # Create id2label mapping for class names
-        self.id2label = {i: f"Class {i}" for i in range(self.num_classes+1)}  # +1 for background
-
-        self.class_weights = torch.ones(self.num_classes + 1, dtype=torch.float32)
-        self.class_weights[1:17] = 2.0
        
     def forward(self, pixel_values, pixel_mask=None, labels=None):
         return self.model(
@@ -59,18 +56,6 @@ class DETR(pl.LightningModule):
        
         loss = outputs.loss
         loss_dict = outputs.loss_dict
-
-        # increase loss for the upper teeth - has an improvement to the conf matrix
-        # if self.training and self.use_weighted_loss:
-        #     for label_dict in labels:
-        #         if 'class_labels' in label_dict:
-        #             class_labels = label_dict['class_labels']
-        #             #gives more weight to samples containing upper teeth, i think all images
-        #             upper_teeth_mask = (class_labels >= 1) & (class_labels <= 16)
-        #             if upper_teeth_mask.any():
-        #                 loss = loss * 1.5
-        #                 break
-            
 
         return loss, loss_dict
  
@@ -288,13 +273,7 @@ class DETR(pl.LightningModule):
         precision = np.nan_to_num(precision)
         recall = np.nan_to_num(recall)
         f1_score = np.nan_to_num(f1_score)
-        
-        # Log metrics
-        # for i in range(1, len(classes)):  # Skip background class
-        #     tooth_name = self.id2label.get(i, f"Class_{i}")
-        #     self.log(f"val_precision_{tooth_name}", precision[i], on_epoch=True)
-        #     self.log(f"val_recall_{tooth_name}", recall[i], on_epoch=True)
-        #     self.log(f"val_f1_{tooth_name}", f1_score[i], on_epoch=True)
+    
         
         # Log average metrics (excluding background)
         self.log("val_precision_avg", np.mean(precision[1:]), on_epoch=True)

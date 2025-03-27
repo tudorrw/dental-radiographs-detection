@@ -10,9 +10,23 @@ import yaml
 from utils.mapper import ToothLabelMapper
 from data.detr_teeth_dataset import CocoDetectionTeeth
 from transformers import DetrImageProcessor
-import cv2
- 
-def visualize_ground_truth(dataset, idx, save_path=None, figsize=(16, 10)):
+import albumentations as A
+
+
+def get_augmentations(): 
+    return A.Compose([
+        # A.NoOp()
+        # A.VerticalFlip(p=0.2),
+        # A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.05, rotate_limit=5, p=1.0),
+        # A.RandomBrightnessContrast(p=1.0),
+        A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.05, rotate_limit=5, p=1.0),
+            # A.RandomGamma(gamma_limit=(80, 120), p=1.0),
+            A.CLAHE(clip_limit=2.0, tile_grid_size=(16,16), p=0.1),
+    ],
+    bbox_params=A.BboxParams(format='coco',label_fields=["category_ids"], clip=True)
+    )
+
+def visualize_ground_truth(dataset, idx, save_path=None, figsize=(16, 10), transform=None):
     """
     Visualize a dataset sample with ground truth annotations.
     
@@ -35,28 +49,36 @@ def visualize_ground_truth(dataset, idx, save_path=None, figsize=(16, 10)):
     # Convert PIL image to numpy array
     img_np = np.array(image)
     
+    # Set colors for the bounding boxes
+    bbox_color = 'darkgreen'
+    text_color = 'white'
+
+    bboxes, category_ids = dataset.encode_targets(targets)
+
+    if transform:
+        augm = get_augmentations()
+        augmented = augm(image=img_np, bboxes=bboxes, category_ids=category_ids)
+        image = augmented["image"]
+        bboxes = augmented["bboxes"]
+        category_ids = [int(c) for c in augmented["category_ids"]] 
+
+        # Update transformed annotations
+        for i, target in enumerate(targets):
+            target["bbox"] = bboxes[i]
+            target["category_id"] = category_ids[i]
+        image = Image.fromarray(image)   
+
     # Create figure and axis
     fig, ax = plt.subplots(figsize=figsize)
     
     # Display the image
-    ax.imshow(img_np)
-    
-    # Set colors for the bounding boxes
-    bbox_color = 'darkgreen'
-    text_color = 'white'
-    
+    ax.imshow(image)
     # Draw bounding boxes and labels
     for target in targets:
-        # Get category IDs and calculate FDI tooth number
-        category_id_1 = target["category_id_1"]
-        category_id_2 = target["category_id_2"]
-        tooth_id = category_id_1 * 10 + category_id_2 + 1
-        
-        # Map to model class index
-        class_idx = int(label_mapper.encode([tooth_id])[0])
         
         # Get bbox coordinates (COCO format: [x, y, width, height])
         x, y, width, height = target["bbox"]
+        class_idx = target["category_id"]
         
         # Create rectangle patch
         rect = patches.Rectangle(
@@ -68,7 +90,8 @@ def visualize_ground_truth(dataset, idx, save_path=None, figsize=(16, 10)):
         ax.add_patch(rect)
         
         # Add label with tooth number and class index
-        label_text = f"{tooth_id} (Class {class_idx})"
+        # label_text = f"{tooth_id} (Class {class_idx})"
+        label_text = class_idx
         ax.text(
             x, y - 5, label_text,
             color=text_color, fontsize=10,
@@ -89,11 +112,9 @@ def visualize_ground_truth(dataset, idx, save_path=None, figsize=(16, 10)):
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"Visualization saved to {save_path}")
     
-    # Show plot
-    plt.show()
-    
     return fig
  
+
 def main():
     # Fixed configurations
     config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "cfg.yaml")
@@ -128,7 +149,8 @@ def main():
     # Visualize each sample
     for i, idx in enumerate(indices):
         save_path = os.path.join(save_dir, f"sample_{i+1}_idx_{idx}.png")
-        visualize_ground_truth(train_dataset, idx, save_path=save_path)
+        # visualize_ground_truth(train_dataset, idx, save_path=save_path)
+        visualize_ground_truth(train_dataset, idx, save_path=save_path, transform=True)
  
 if __name__ == "__main__":
     main()

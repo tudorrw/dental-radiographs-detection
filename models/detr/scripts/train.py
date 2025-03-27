@@ -102,8 +102,8 @@ if __name__ == "__main__":
         devices=1,
         logger=logger,
         callbacks=[checkpoint_callback, lr_monitor, early_stopping],
-        check_val_every_n_epoch=config.get("validation_interval", 5),
-        gradient_clip_val=config.get("gradient_clip_val", 0.1),
+        check_val_every_n_epoch=config["validation_interval"],
+        gradient_clip_val=config["gradient_clip_val"],
         precision="16-mixed" if torch.cuda.is_available() else 32  # Use mixed precision for faster training
     )
  
