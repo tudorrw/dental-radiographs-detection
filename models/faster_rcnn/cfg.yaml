@@ -1,8 +1,10 @@
-image_dir: datasets/coco
+image_dir: dataset/origin
+csv_path: dataset/pascal_voc
 checkpoints_path: checkpoints/
 data_type: quadrant_enumeration
+format_type: voc
 n_teeth: 32
-max_epochs: 100
+max_epochs: 50
 batch_size: 4
 learning_rate: 1e-3
 momentum: 0.9

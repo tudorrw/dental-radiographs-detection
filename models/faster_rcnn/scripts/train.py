@@ -9,7 +9,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from torch.utils.data import DataLoader
 
 
-from data.teeth_dataset import TeethDataset
+from data.rcnn_teeth_dataset import TeethDataset
 
 if __name__ == "__main__":
 
@@ -27,13 +27,13 @@ if __name__ == "__main__":
 
     # Load datasets
     train_dataset = TeethDataset(
-        csv_path=f"{config['image_dir']}/{config['data_type']}/quadrant_enumeration_voc_train.csv",
         image_dir=f"{config['image_dir']}/{config['data_type']}/xrays", 
+        csv_path=f"{config['csv_path']}/{config['data_type']}/quadrant_enumeration_voc_train.csv",
         dataset_type="train"
     )
     val_dataset = TeethDataset(
-        csv_path=f"{config['image_dir']}/{config['data_type']}/quadrant_enumeration_voc_val.csv",
         image_dir=f"{config['image_dir']}/{config['data_type']}/xrays",
+        csv_path=f"{config['csv_path']}/{config['data_type']}/quadrant_enumeration_voc_val.csv",
         dataset_type="val"
     )
 
