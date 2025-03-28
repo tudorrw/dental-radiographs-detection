@@ -41,9 +41,18 @@ names:
   32: Class_32
 
 
-
-  augment:
-  clahe:
-    clip_limit: 2.0
-    tile_grid_size: [16, 16]
-    p: 0.3
+hsv_h: 0.0,  # image HSV-Hue augmentation (fraction)
+hsv_s: 0.0,    # image HSV-Saturation augmentation (fraction)
+hsv_v: 0.4,    # image HSV-Value augmentation (fraction)
+degrees: 0.0,  # image rotation (+/- deg)
+translate: 0.1,  # image translation (+/- fraction)
+scale: 0.0,    # image scale (+/- gain)
+shear: 0.0,    # image shear (+/- deg)
+perspective: 0.0,  # image perspective (+/- fraction), range 0-0.001
+flipud: 0.0,   # image flip up-down (probability)
+fliplr: 0.0,   # image flip left-right (probability)
+mosaic: 0.0,   # image mosaic (probability)
+mixup: 0.0,    # image mixup (probability)
+copy_paste: 0.0,  # segment copy-paste (probability)
+erasing: 0.0,  # random erasing (probability)
+crop_fraction: 0.1,  # image center crop fraction
