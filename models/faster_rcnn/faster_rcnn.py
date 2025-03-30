@@ -142,6 +142,28 @@ class FasterRCNN(L.LightningModule):
  
         return total_loss
         
+    def on_validation_epoch_start(self):
+        # Reset stored predictions and labels
+        self.val_pred_labels = []
+        self.val_true_labels = []
+        self.metric.reset()
+        
+    def on_validation_epoch_end(self):
+        # Compute and log detection metrics (mAP etc.)
+        computed_metrics = self.metric.compute()
+    
+        # Filter out keys that start with "mar_" and the "classes" key
+        filtered_metrics = {k: v for k, v in computed_metrics.items() if not k.startswith("mar_") and not k == "classes"}
+        for k, v in filtered_metrics.items():
+            self.log(f"val_{k}", v)
+ 
+        # Compute confusion matrix and classification metrics if we have predictions
+        if self.val_pred_labels and self.val_true_labels:
+            self.compute_confusion_matrix()
+        
+        # Reset metrics for next epoch
+        self.metric.reset()
+        
     def _box_iou(self, boxes1, boxes2):
         """
         Compute IoU between two sets of boxes of shape N x 4 and M x 4
@@ -165,29 +187,8 @@ class FasterRCNN(L.LightningModule):
         iou = inter / union
         
         return iou
-    
-    def on_validation_epoch_start(self):
-        # Reset stored predictions and labels
-        self.val_pred_labels = []
-        self.val_true_labels = []
-        self.metric.reset()
-        
-    def on_validation_epoch_end(self):
-        # Compute and log detection metrics (mAP etc.)
-        computed_metrics = self.metric.compute()
-    
-        # Filter out keys that start with "mar_" and the "classes" key
-        filtered_metrics = {k: v for k, v in computed_metrics.items() if not k.startswith("mar_") and not k == "classes"}
-        for k, v in filtered_metrics.items():
-            self.log(f"val_{k}", v)
- 
-        # Compute confusion matrix and classification metrics if we have predictions
-        if self.val_pred_labels and self.val_true_labels:
-            self.compute_confusion_matrix()
-        
-        # Reset metrics for next epoch
-        self.metric.reset()
-        
+
+
     def compute_confusion_matrix(self):
         """Compute and visualize confusion matrix with precision/recall metrics."""
         if not self.val_pred_labels or not self.val_true_labels:
@@ -254,6 +255,30 @@ class FasterRCNN(L.LightningModule):
         # Reset stored predictions
         self.val_pred_labels = []
         self.val_true_labels = []
+
+
+    def test_step(self, batch, batch_idx):
+        images, targets = batch
+ 
+        # Set model in eval mode for predictions
+        predictions = self.model(images)
+        
+        # Update detection metrics
+        self.metric.update(preds=predictions, target=targets)
+ 
+        return predictions
+
+    def on_validation_epoch_end(self):
+        # Compute and log detection metrics (mAP etc.)
+        computed_metrics = self.metric.compute()
+    
+        # Filter out keys that start with "mar_" and the "classes" key
+        filtered_metrics = {k: v for k, v in computed_metrics.items() if not k.startswith("mar_") and not k == "classes"}
+        for k, v in filtered_metrics.items():
+            self.log(f"val_{k}", v)
+        
+        # Reset metrics for next epoch
+        self.metric.reset()
  
     def configure_optimizers(self):
         return torch.optim.SGD(self.model.parameters(), lr=self.learning_rate, momentum=self.momentum)
