@@ -1,3 +1,18 @@
 Train: 475 unique images, 13539 bboxes
 Val: 95 unique images, 2755 bboxes
 Test: 64 unique images, 1801 bboxes
+
+
+Faster RCNN
+version 0: with early stopping, learn monitor all that, it was 18 hours, results not so good
+version 1: without early stopping, learn monitor was slightly better
+
+
+DETR
+version_0 on 20 epochs without any augmentations/transformations/manipulations of the iamges/bboxes i had bad results
+version_1 on 50 the results start to get better as all the metrics were at some good results except map_75 which is just 0.15
+version_2 on 50 epochs with transformations te results got slightly better compared to the previous version 
+precision: the model rarely makes false positive predictions
+recall: the model is findiong most of the teeth
+precision/recall indicates strong  classification performance
+could be more precise with the bounding box placement

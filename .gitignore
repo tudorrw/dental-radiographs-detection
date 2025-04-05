@@ -1,6 +1,7 @@
 checkpoints
-teeth-yolov11-venv
-datasets
-runs
+dataset
+runs/
 tb_logs
+visualizations/
+results/
 **/__pycache__
