@@ -21,7 +21,7 @@ def get_augmentations():
         # A.RandomBrightnessContrast(p=1.0),
         A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.05, rotate_limit=5, p=1.0),
             # A.RandomGamma(gamma_limit=(80, 120), p=1.0),
-            A.CLAHE(clip_limit=2.0, tile_grid_size=(16,16), p=0.1),
+        A.CLAHE(clip_limit=2.0, tile_grid_size=(16,16), p=0.5),
     ],
     bbox_params=A.BboxParams(format='coco',label_fields=["category_ids"], clip=True)
     )

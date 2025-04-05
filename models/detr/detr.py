@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 import pytorch_lightning as pl
-from transformers import DetrForObjectDetection, AutoModelForObjectDetection
+from transformers import DetrForObjectDetection, DeformableDetrForObjectDetection
 
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
 import matplotlib.pyplot as plt
@@ -20,6 +20,11 @@ class DETR(pl.LightningModule):
         self.use_weighted_loss = use_weighted_loss
        
         # Load pre-trained DETR model
+        # self.model = DetrForObjectDetection.from_pretrained(
+        #     "facebook/detr-resnet-50-dc5",
+        #     num_labels=self.num_classes,
+        #     ignore_mismatched_sizes=True
+        # )
         self.model = DetrForObjectDetection.from_pretrained(
             "facebook/detr-resnet-50",
             num_labels=self.num_classes,
@@ -284,35 +289,20 @@ class DETR(pl.LightningModule):
         self.val_pred_labels = []
         self.val_true_labels = []
     
+
+
     def configure_optimizers(self):
-        # Separate backbone and detection head parameters for different learning rates
-        backbone_params = [] # Parameters from the backbone (ResNet50)
-        head_params = []    # Parameters from the detection head and trandformers
-       
-        for name, param in self.model.named_parameters():
-            if "backbone" in name:
-                backbone_params.append(param)
-            else:
-                head_params.append(param)
-       
+
         # Create optimizer with different learning rates
-        optimizer = torch.optim.AdamW([
-            {'params': backbone_params, 'lr': self.learning_rate * 0.1},
-            {'params': head_params, 'lr': self.learning_rate}
-        ], weight_decay=self.weight_decay)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
        
         # Learning rate scheduler
         lr_scheduler = {
-            "scheduler": torch.optim.lr_scheduler.OneCycleLR(
+            "scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(
                 optimizer,
-                max_lr=[self.learning_rate * 0.1, self.learning_rate],
-                total_steps=self.trainer.estimated_stepping_batches,
-                pct_start=0.1,  # Warmup for 10% of training
-                div_factor=25,
-                final_div_factor=1000,
+                T_max=10,
+                eta_min=1e-6,
             ),
-            "interval": "step",
-            "frequency": 1
         }
        
         return {"optimizer": optimizer, "lr_scheduler": lr_scheduler}

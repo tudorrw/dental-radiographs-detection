@@ -2,7 +2,7 @@ import os
 import torch
 from PIL import Image
 import torchvision
-from transformers import DetrImageProcessor
+from transformers import DetrImageProcessor, DetrFeatureExtractor
 from utils.mapper import ToothLabelMapper
 import albumentations as A
 import numpy as np

@@ -83,7 +83,7 @@ if __name__ == "__main__":
         mode="min",
         save_top_k=2,
         save_last=True,
-        filename="epoch{epoch:02d}-val_loss{val_loss:.4f}"
+        filename="{epoch:02d}-{val_loss:.4f}"
     )
     
     lr_monitor = LearningRateMonitor(logging_interval="epoch")
@@ -101,7 +101,7 @@ if __name__ == "__main__":
         accelerator="gpu" if torch.cuda.is_available() else "cpu",
         devices=1,
         logger=logger,
-        callbacks=[checkpoint_callback, lr_monitor, early_stopping],
+        callbacks=[checkpoint_callback, early_stopping, lr_monitor],
         check_val_every_n_epoch=config["validation_interval"],
         gradient_clip_val=config["gradient_clip_val"],
         precision="16-mixed" if torch.cuda.is_available() else 32  # Use mixed precision for faster training
