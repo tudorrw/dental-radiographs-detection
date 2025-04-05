@@ -12,9 +12,9 @@ from utils.mapper import ToothLabelMapper
 
 def visualize_ground_truth(dataset, idx, save_path=None, figsize=(16, 10)):
     label_mapper = ToothLabelMapper()
-    
+    print(dataset[idx])
    
-    image, targets = dataset[idx]  # Get image and annotations
+    image, targets = dataset[idx]["image"], dataset[idx]["targets"]  # Get image and annotations
     image_np = image.permute(1, 2, 0).numpy() # Convert tensor to numpy image
     image_np = np.clip(image_np, 0, 1) # Denormalize (image was normalized to 0-1 range)
     image_pil = Image.fromarray((image_np * 255).astype(np.uint8)) # Convert to PIL image for display
@@ -80,11 +80,10 @@ def visualize_ground_truth(dataset, idx, save_path=None, figsize=(16, 10)):
 def main():
     CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "cfg.yaml")
 
-    print("Starting training...")
     with open(CONFIG_PATH, "r") as f:
         config = yaml.safe_load(f)
 
-    save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "visualizations")
+    save_dir = os.path.join(config["visualization_dir"] ,"ground_truth")
     num_samples = 5
     seed = 42
     random.seed(seed)

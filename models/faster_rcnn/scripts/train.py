@@ -5,7 +5,7 @@ import yaml
 import pytorch_lightning as pl
 from models.faster_rcnn.faster_rcnn import FasterRCNN
 from pytorch_lightning.loggers import TensorBoardLogger
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, EarlyStopping 
 from torch.utils.data import DataLoader
 
 
@@ -49,18 +49,37 @@ if __name__ == "__main__":
     # Logger & Checkpoints
     logger = TensorBoardLogger(save_dir=config["checkpoints_path"], name="faster_rcnn")
     
+    version_dir = os.path.join(config["checkpoints_path"], "faster_rcnn", f"version_{logger.version}")
+    os.makedirs(version_dir, exist_ok=True)
 
     # save_top_k=1: Only the best model (in terms of the lowest training loss) will be saved.
     # mode='min': The checkpoint is saved when the monitored value (train_loss) decreases.
     # dirpath='checkpoints/': Specifies the directory where the checkpoint is saved.
-    checkpoint_callback = ModelCheckpoint(dirpath=config["checkpoints_path"], monitor="val_loss", mode="min", save_top_k=1)
+    checkpoint_callback = ModelCheckpoint(
+        dirpath=version_dir, 
+        monitor="val_loss", 
+        mode="min", 
+        save_top_k=2,
+        save_last=True,
+        filename="{epoch:02d}-{val_loss:.2f}"
+    )
+
+    lr_monitor = LearningRateMonitor(logging_interval="epoch")
+    
+    early_stopping = EarlyStopping(
+        monitor="val_loss",
+        patience=10,  # Stop after 10 epochs without improvement
+        mode="min",
+        verbose=True
+    )
+    
     trainer = pl.Trainer(
         max_epochs=config["max_epochs"],
-        accelerator="gpu" if torch.cuda.is_available() else "cpu",
+        accelerator="gpu",
         devices=1,
         logger=logger,
         callbacks=[checkpoint_callback],
-        check_val_every_n_epoch=5
+        check_val_every_n_epoch=5,
     )
 
     # Train

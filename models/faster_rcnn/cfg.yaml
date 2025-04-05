@@ -2,6 +2,8 @@ image_dir: dataset/origin
 csv_path: dataset/pascal_voc
 checkpoints_path: checkpoints/
 data_type: quadrant_enumeration
+output_dir: results/faster_rcnn
+visualization_dir: visualizations/faster_rcnn
 format_type: voc
 n_teeth: 32
 max_epochs: 50

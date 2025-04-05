@@ -3,7 +3,7 @@ import pytorch_lightning as L
 import numpy as np
 import os
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
-from torchvision.models.detection import fasterrcnn_resnet50_fpn, FasterRCNN_ResNet50_FPN_Weights
+from torchvision.models.detection import fasterrcnn_resnet50_fpn, FasterRCNN_ResNet50_FPN_Weights, fasterrcnn_resnet50_fpn_v2, FasterRCNN_ResNet50_FPN_V2_Weights
 from torchvision.models.resnet import ResNet50_Weights
  
 import matplotlib.pyplot as plt
@@ -11,7 +11,8 @@ from torchmetrics.detection.mean_ap import MeanAveragePrecision
 from sklearn.metrics import confusion_matrix
 import seaborn as sns
 from utils.mapper import ToothLabelMapper
- 
+import csv 
+
 '''
 Faster R-CNN processes the image:
  
@@ -28,17 +29,20 @@ However, Faster R-CNN is making many more predictions because it's finding multi
  
 '''
 class FasterRCNN(L.LightningModule):
-    def __init__(self, num_classes, learning_rate, momentum):
+    def __init__(self, num_classes, learning_rate, momentum, output_dir=None):
         super(FasterRCNN, self).__init__()
  
         self.save_hyperparameters()
         self.num_classes = num_classes
         self.learning_rate = learning_rate
         self.momentum = momentum
-        
-        self.model = fasterrcnn_resnet50_fpn(
-            weights=FasterRCNN_ResNet50_FPN_Weights.COCO_V1,
-            weights_backbone=ResNet50_Weights.IMAGENET1K_V1)
+        # self.model = fasterrcnn_resnet50_fpn(
+        #     weights=FasterRCNN_ResNet50_FPN_Weights.COCO_V1           
+        #     )
+        self.model = fasterrcnn_resnet50_fpn_v2(
+            weights=FasterRCNN_ResNet50_FPN_V2_Weights.DEFAULT           
+            )
+        # self.model = fasterrcnn_resnet50_fpn(pretrained=True)
         in_features = self.model.roi_heads.box_predictor.cls_score.in_features
         self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes=self.num_classes)
  
@@ -58,7 +62,7 @@ class FasterRCNN(L.LightningModule):
         return self.model(images, targets)
  
     def training_step(self, batch, batch_idx):
-        images, targets = batch
+        images, targets = batch["image"], batch["targets"]
  
         targets=[{k: v for k, v in t.items()} for t in targets]
  
@@ -73,7 +77,8 @@ class FasterRCNN(L.LightningModule):
  
     # Trainer adds torch.no_grad() for the validation loop, so anyrhing in the validation_step() method will be already with gradients disabled
     def validation_step(self, batch, batch_idx):
-        images, targets = batch
+        images, targets = batch["image"], batch["targets"]
+
  
         # Set model in training mode to get access to losses
         self.model.train()
@@ -258,7 +263,8 @@ class FasterRCNN(L.LightningModule):
 
 
     def test_step(self, batch, batch_idx):
-        images, targets = batch
+        images, targets = batch["image"], batch["targets"]
+
  
         # Set model in eval mode for predictions
         predictions = self.model(images)
@@ -268,7 +274,7 @@ class FasterRCNN(L.LightningModule):
  
         return predictions
 
-    def on_validation_epoch_end(self):
+    def on_test_epoch_end(self):
         # Compute and log detection metrics (mAP etc.)
         computed_metrics = self.metric.compute()
     
@@ -279,6 +285,54 @@ class FasterRCNN(L.LightningModule):
         
         # Reset metrics for next epoch
         self.metric.reset()
- 
+
+    def on_predict_start(self):
+        if not os.path.exists(f"{self.hparams.output_dir}"):
+             os.makedirs(self.hparams.output_dir, exist_ok=True)
+
+    def predict_step(self, batch, batch_idx):
+        images, targets, ids = batch["image"], batch["targets"], batch["id"]
+        
+        # Get predictions from model
+        predictions = self.model(images)
+        
+        
+        # Define CSV path
+        csv_path = os.path.join(self.hparams.output_dir, "predictions_results.csv")
+        
+        # Check if file exists to determine if we need to write the header
+        file_exists = os.path.isfile(csv_path)
+        
+        # Open CSV in append mode
+        with open(csv_path, 'a', newline='') as csvfile:
+            fieldnames = ['image_id', 'prediction_boxes', 'prediction_scores', 'prediction_labels', 
+                        'target_boxes', 'target_labels']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            
+            # Write header if file doesn't exist
+            if not file_exists:
+                writer.writeheader()
+            
+            # Process each image in the batch
+            for image_id, target, prediction in zip(ids, targets, predictions):
+                # Convert tensors to lists for CSV storage
+                pred_boxes = prediction["boxes"].detach().cpu().numpy().tolist()
+                pred_scores = prediction["scores"].detach().cpu().numpy().tolist()
+                pred_labels = prediction["labels"].detach().cpu().numpy().tolist()
+                
+                target_boxes = target["boxes"].cpu().numpy().tolist()
+                target_labels = target["labels"].cpu().numpy().tolist()
+                
+                # Write row to CSV
+                writer.writerow({
+                    'image_id': image_id,
+                    'prediction_boxes': str(pred_boxes),
+                    'prediction_scores': str(pred_scores),
+                    'prediction_labels': str(pred_labels),
+                    'target_boxes': str(target_boxes),
+                    'target_labels': str(target_labels)
+                })
+        
+        return predictions
     def configure_optimizers(self):
         return torch.optim.SGD(self.model.parameters(), lr=self.learning_rate, momentum=self.momentum)
