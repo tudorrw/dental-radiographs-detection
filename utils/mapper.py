@@ -47,4 +47,4 @@ class ToothLabelMapper:
         Returns:
             np.ndarray: Transformed labels mapped back to their original FDI numbers.
         """
-        return np.array([self.index_to_label.get(label, -1) for label in encoded_labels], dtype=np.int64)
+        return np.array([self.index_to_label[label] for label in encoded_labels])

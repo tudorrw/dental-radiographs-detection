@@ -39,8 +39,8 @@ class FasterRCNN(L.LightningModule):
         # self.model = fasterrcnn_resnet50_fpn(
         #     weights=FasterRCNN_ResNet50_FPN_Weights.COCO_V1           
         #     )
-        self.model = fasterrcnn_resnet50_fpn_v2(
-            weights=FasterRCNN_ResNet50_FPN_V2_Weights.DEFAULT           
+        self.model = fasterrcnn_resnet50_fpn(
+            weights=FasterRCNN_ResNet50_FPN_Weights.DEFAULT           
             )
         # self.model = fasterrcnn_resnet50_fpn(pretrained=True)
         in_features = self.model.roi_heads.box_predictor.cls_score.in_features
