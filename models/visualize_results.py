@@ -9,7 +9,7 @@ import matplotlib.patches as patches
 from torchvision.ops import nms
 import yaml
 from utils.nms import UniqueClassNMSProcessor
- 
+from tqdm import tqdm
 
  
 def visualize_predictions(image_path, predictions, save_path=None, figsize=(16, 10)):
@@ -124,20 +124,8 @@ def parse_boxes_string(boxes_str):
     return np.array(boxes)
 
 
-
-def visualize_from_csv(score_threshold=0.5):
-    """
-    Process a CSV file with predictions and visualize them.
-    
-    Args:
-        csv_path: path to CSV with predictions
-        image_dir: directory containing the images
-        checkpoint_name: name for output directory
-        score_threshold: minimum confidence score
-    """
-
-   # Create output directory
-    CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "cfg.yaml")
+def load_files_faster_rcnn():
+    CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "faster_rcnn", "cfg.yaml")
 
     with open(CONFIG_PATH, "r") as f:
         config = yaml.safe_load(f)
@@ -148,11 +136,32 @@ def visualize_from_csv(score_threshold=0.5):
 
     csv_path = os.path.join(config["output_dir"], f"{checkpoint_dict['version']}__{checkpoint_dict['filename'].rsplit('.', 1)[0]}", "predictions_results.csv")
     image_dir=f"{config['image_dir']}/{config['data_type']}/xrays" 
-    # Load predictions
     df = pd.read_csv(csv_path)
-    
-    # Initialize NMS processor
-    nms_processor = UniqueClassNMSProcessor(iou_threshold=0.5)
+    return df, image_dir, output_dir
+
+
+def load_files_yolo():
+
+    checkpoint_dict = os.path.join("runs", "detect", "train", "weights", "best.pt")
+    output_dir = os.path.join("visualizations", "yolo", "train")
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    csv_path = os.path.join("results", "yolo", "train", "predictions_results.csv")
+    image_dir = os.path.join("dataset", "yolo", "test", "images")
+    df = pd.read_csv(csv_path)
+    return df, image_dir, output_dir
+
+
+
+def visualize_from_csv(model, use_nms, score_threshold=0.5):
+
+    if use_nms and model == "faster_rcnn":
+        df, image_dir, output_dir = load_files_faster_rcnn()
+    elif not use_nms and model == "yolo":
+        df, image_dir, output_dir = load_files_yolo()
+    else:
+        raise ValueError("Invalid model or NMS setting. Use 'faster_rcnn' with NMS or 'yolo' without NMS.")
     
     # Get unique image IDs
     image_ids = df['image_id'].unique()
@@ -160,6 +169,7 @@ def visualize_from_csv(score_threshold=0.5):
     
     # Process each image
     for image_id in image_ids:
+        print(f"Processing image: {image_id}")
         # Get predictions for this image
         row = df[df['image_id'] == image_id].iloc[0]
         print("Images id:", image_id)
@@ -182,10 +192,15 @@ def visualize_from_csv(score_threshold=0.5):
         }
         
         # Apply NMS
-        filtered_predictions = nms_processor(predictions)
-        
+        if use_nms:
+            nms_processor = UniqueClassNMSProcessor(iou_threshold=0.5)   
+            filtered_predictions = nms_processor(predictions)
+        else:
+            filtered_predictions = predictions
+
         # Get image path
         image_path = os.path.join(image_dir, f"{image_id}.png")
+        print
         
         # Create visualization
         save_path = os.path.join(output_dir, f"{image_id}.png")
@@ -193,8 +208,8 @@ def visualize_from_csv(score_threshold=0.5):
         
     print(f"Visualizations completed. Check {output_dir}")
  
-# Example usage
+
 if __name__ == "__main__":
-    # Replace these with your actual paths
-    
-    visualize_from_csv()
+    # use nms = True for Faster R-CNN, False for YOLO
+    model = "faster_rcnn"  # or "yolo"
+    visualize_from_csv(model, use_nms=False)
