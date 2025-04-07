@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useDropzone } from "react-dropzone"
-import { Upload, X, ZoomIn, ZoomOut, RotateCw, Loader2, Download, Info, ImageIcon, ActivityIcon } from "lucide-react"
+import { Upload, X, ZoomIn, ZoomOut, Move, Loader2, Download, Info, ImageIcon, ActivityIcon } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -28,7 +28,14 @@ export default function XrayAnalyzer() {
     labels?: number[],
     // tooth_labels?: string[],
   } | null>(null)
-  //For tooth chart
+  
+    // New state for advanced zoom and pan functionality
+    const [position, setPosition] = useState({ x: 0, y: 0 })
+    const [isDragging, setIsDragging] = useState(false)
+    const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+    const imageContainerRef = useRef<HTMLDivElement>(null)
+    const [isImageHovered, setIsImageHovered] = useState(false)
+
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: {
@@ -47,14 +54,89 @@ export default function XrayAnalyzer() {
           setProcessedImage(null)
           setDetections(null)
           setActiveTab("original")
+          setZoom(100)
+          setPosition({ x: 0, y: 0 })
         }
         reader.readAsDataURL(acceptedFiles[0])
       }
     },
   })
 
+  // Zoom functions
+  const handleZoomChange = (value: number[]) => {
+    setZoom(value[0])
+  }
+
+    const zoomIn = () => {
+    setZoom((prev) => Math.min(prev + 25, 400))
+  }
+
+  const zoomOut = () => {
+    setZoom((prev) => Math.max(prev - 25, 50))
+  }
+
+  const resetZoom = () => {
+    setZoom(100)
+    setPosition({ x: 0, y: 0 })
+  }
+
+  // Mouse event handlers for dragging/panning
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (zoom > 100) {
+      setIsDragging(true)
+      setDragStart({
+        x: e.clientX - position.x,
+        y: e.clientY - position.y,
+      })
+    }
+  }
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (isDragging && zoom > 100) {
+      console.log(isDragging)
+      const newX = e.clientX - dragStart.x
+      const newY = e.clientY - dragStart.y
+
+      // Calculate boundaries to prevent dragging too far
+      const container = imageContainerRef.current
+      if (container) {
+        const containerWidth = container.clientWidth
+        const containerHeight = container.clientHeight
+
+        // Limit the drag based on zoom level
+        const maxDragX = ((zoom - 100) * containerWidth) / 200
+        const maxDragY = ((zoom - 100) * containerHeight) / 200
+
+        const boundedX = Math.max(Math.min(newX, maxDragX), -maxDragX)
+        const boundedY = Math.max(Math.min(newY, maxDragY), -maxDragY)
+
+        setPosition({ x: boundedX, y: boundedY })
+      }
+    }
+  }
+
+  const handleMouseUp = () => {
+    setIsDragging(false)
+  }
+
+  // Handle wheel events for zooming with Ctrl+scroll
+  const handleWheel = (e: React.WheelEvent) => {
+    // Only handle wheel events when Ctrl key is pressed
+    if (e.ctrlKey) {
+      e.preventDefault()
+      console.log("Zooming with wheel...")
+      // Determine zoom direction
+      const delta = e.deltaY < 0 ? 10 : -10
+
+      // Calculate new zoom level
+      const newZoom = Math.min(Math.max(zoom + delta, 50), 400)
+
+      setZoom(newZoom)
+    }
+  }
+
   /**
-   * Only call this when the user explicitly requests an analysis.
+   * call this when the user explicitly requests an analysis
    */
   const handleAnalyze = async () => {
     if (!preview) return
@@ -101,9 +183,44 @@ export default function XrayAnalyzer() {
     }
   }
 
-  const handleZoomChange = (value: number[]) => {
-    setZoom(value[0])
-  }
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      setIsDragging(false)
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only handle keyboard shortcuts when image is hovered or container is focused
+      if (isImageHovered || document.activeElement === imageContainerRef.current) {
+        if (e.key === "+" || e.key === "=") {
+          e.preventDefault()
+          zoomIn()
+        } else if (e.key === "-" || e.key === "_") {
+          e.preventDefault()
+          zoomOut()
+        } else if (e.key === "0") {
+          e.preventDefault()
+          resetZoom()
+        }
+      }
+    }
+
+    // Prevent the default browser zoom behavior on Ctrl+wheel
+    const preventDefaultZoom = (e: WheelEvent) => {
+      if (e.ctrlKey && isImageHovered) {
+        e.preventDefault()
+      }
+    }
+
+    window.addEventListener("mouseup", handleGlobalMouseUp)
+    window.addEventListener("keydown", handleKeyDown)
+    window.addEventListener("wheel", preventDefaultZoom, { passive: false })
+
+    return () => {
+      window.removeEventListener("mouseup", handleGlobalMouseUp)
+      window.removeEventListener("keydown", handleKeyDown)
+      window.removeEventListener("wheel", preventDefaultZoom)
+    }
+  }, [isImageHovered, zoom])
 
   const resetImage = () => {
     setFiles([])
@@ -111,6 +228,7 @@ export default function XrayAnalyzer() {
     setProcessedImage(null)
     setDetections(null)
     setActiveTab("original")
+    resetZoom()
   }
 
   return (
@@ -194,7 +312,7 @@ export default function XrayAnalyzer() {
                 <Slider
                   defaultValue={[100]}
                   min={50}
-                  max={200}
+                  max={400}
                   step={5}
                   value={[zoom]}
                   onValueChange={handleZoomChange}
@@ -202,17 +320,17 @@ export default function XrayAnalyzer() {
                 />
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="flex-1">
+                <Button variant="outline" size="sm" className="flex-1" onClick={zoomIn}>
                   <ZoomIn className="h-4 w-4 mr-2" />
                   Zoom In
                 </Button>
-                <Button variant="outline" size="sm" className="flex-1">
+                <Button variant="outline" size="sm" className="flex-1" onClick={zoomOut}>
                   <ZoomOut className="h-4 w-4 mr-2" />
                   Zoom Out
                 </Button>
-                <Button variant="outline" size="sm" className="flex-1">
-                  <RotateCw className="h-4 w-4 mr-2" />
-                  Rotate
+                <Button variant="outline" size="sm" className="flex-1" onClick={resetZoom}>
+                  <Move className="h-4 w-4 mr-2" />
+                  Reset
                 </Button>
               </div>
 
@@ -263,6 +381,11 @@ export default function XrayAnalyzer() {
                     <p className="max-w-xs">
                       This tool automatically detects and highlights teeth in
                       dental X-rays using AI technology.
+                      <br />
+                      <span className="text-xs text-gray-400 mt-1 block">
+                        Tip: Use Ctrl+Scroll or +/- keys to zoom. Click and drag to pan.
+                      </span>
+
                     </p>
                   </TooltipContent>
                 </Tooltip>
@@ -305,11 +428,27 @@ export default function XrayAnalyzer() {
                 </TabsList>
 
                 <TabsContent value="original" className="mt-0">
-                  <div className="border border-gray-200 rounded-lg bg-black p-1 h-[400px] flex items-center justify-center overflow-hidden">
+                  <div 
+                    ref={imageContainerRef}
+                    className="border border-gray-200 rounded-lg bg-black p-1 h-[400px] flex items-center justify-center overflow-hidden relative"
+                    onMouseDown={handleMouseDown}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
+                    onMouseEnter={() => setIsImageHovered(true)}
+                    onMouseLeave={() => setIsImageHovered(false)}
+                    onWheel={handleWheel}
+                    tabIndex={0} // Make the div focusable for keyboard shortcuts
+                    style={{ cursor: zoom > 100 ? (isDragging ? "grabbing" : "grab") : "default" }}
+                  >  
                     {preview && (
                       <div
-                        style={{ transform: `scale(${zoom / 100})` }}
-                        className="transition-transform duration-200"
+                        style={{
+                          transform: `scale(${zoom / 100})`,
+                          transition: isDragging ? "none" : "transform 0.2s",
+                          position: "relative",
+                          left: `${position.x}px`,
+                          top: `${position.y}px`,
+                        }}
                       >
                         <Image
                           src={preview || "/placeholder.svg"}
@@ -317,6 +456,7 @@ export default function XrayAnalyzer() {
                           width={600}
                           height={400}
                           className="max-h-[390px] w-auto"
+                          draggable={false}
                         />
                       </div>
                     )}
@@ -324,22 +464,47 @@ export default function XrayAnalyzer() {
                 </TabsContent>
 
                 <TabsContent value="processed" className="mt-0">
-                  <div className="border border-gray-200 rounded-lg bg-black p-1 h-[400px] flex items-center justify-center overflow-hidden">
-                  <div
-                        style={{ transform: `scale(${zoom / 100})` }}
-                        className="transition-transform duration-200 relative"
-                      >
-                        <Image
-                          src={processedImage || "/placeholder.svg"}
-                          alt="Processed X-Ray"
-                          width={600}
-                          height={400}
-                          className="max-h-[390px] w-auto"
-                        />
-                      </div>
+                  <div 
+                    ref={imageContainerRef}
+                    className="border border-gray-200 rounded-lg bg-black p-1 h-[400px] flex items-center justify-center overflow-hidden relative"
+                    onMouseDown={handleMouseDown}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
+                    onMouseEnter={() => setIsImageHovered(true)}
+                    onMouseLeave={() => setIsImageHovered(false)}
+                    onWheel={handleWheel}
+                    tabIndex={0} // Make the div focusable for keyboard shortcuts
+                    style={{ cursor: zoom > 100 ? (isDragging ? "grabbing" : "grab") : "default" }}
+                  >
+                  
+                    <div
+                      style={{
+                        transform: `scale(${zoom / 100})`,
+                        transition: isDragging ? "none" : "transform 0.2s",
+                        position: "relative",
+                        left: `${position.x}px`,
+                        top: `${position.y}px`,
+                      }}   
+                    >
+                      <Image
+                        src={processedImage || "/placeholder.svg"}
+                        alt="Processed X-Ray"
+                        width={600}
+                        height={400}
+                        className="max-h-[390px] w-auto"
+                        draggable={false}
+                      />
                     </div>
+                  </div>
                 </TabsContent>
               </Tabs> 
+
+              <div className="mt-2 text-xs text-gray-500 text-center">
+                <span>
+                  Zoom: Ctrl+Scroll or +/- keys |{zoom > 100 ? " Click and drag to pan | " : " "}
+                  Press 0 to reset view
+                </span>
+              </div>
 
             {/* If we've got detection data, show it */}
               {processedImage && detections && activeTab === "processed" && (
