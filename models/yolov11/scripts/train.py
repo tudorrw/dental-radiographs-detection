@@ -1,8 +1,6 @@
 import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 from ultralytics import YOLO
-from ultralytics.data.augment import Albumentations
-from ultralytics.engine.trainer import BaseTrainer
 
 def train_yolo_model():
     BASE_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)))

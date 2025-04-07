@@ -4,14 +4,13 @@ import io
 import cv2
 import base64
 import torch
-import yaml
 import uvicorn
 import numpy as np
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, ImageDraw, ImageFont
 
-from models.faster_rcnn.faster_rcnn import FasterRCNN
+from api.model import FineTunedModels
 from utils.mapper import ToothLabelMapper
 from utils.nms import UniqueClassNMSProcessor  # If you're using class-wise NMS
 
@@ -26,49 +25,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-label_mapper = ToothLabelMapper()
-nms_processor = UniqueClassNMSProcessor(iou_threshold=0.5)  # Example if you're applying class-wise NMS
+# Example if you're applying class-wise NMS
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-def get_model():
-    # 1) Load config
-    config_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "models",
-        "faster_rcnn",
-        "cfg.yaml"
-    )
-    with open(config_path, "r") as f:
-        config = yaml.safe_load(f)
-
-    # 2) Load model checkpoint
-    checkpoint_dict = dict(version="version_0", filename="epoch=44-val_loss=0.94.ckpt")
-    checkpoint = os.path.join(
-        config["checkpoints_path"],
-        "faster_rcnn",
-        checkpoint_dict["version"],
-        checkpoint_dict["filename"]
-    )
-    print("Loading model from checkpoint:", checkpoint)
-
-    model = FasterRCNN.load_from_checkpoint(checkpoint)
-    model.eval()
-    model.to(device)
-    return model
-
-model = get_model()
+models = FineTunedModels(device)
 
 def quadrant_color(q):
     if q == 1:
-         return "green"
+         return (0, 128, 0, 128)      # Green, 50% transparent
     elif q == 2:
-        return "yellow"
+         return (255, 255, 0, 128)    # Yellow, 50% transparent
     elif q == 3:
-        return "red"
-    return "cyan"
+         return (255, 0, 0, 128)      # Red, 50% transparent
+    return (0, 255, 255, 128)          # Cyan, 50% transpare
 
-@app.post("/detections/")
-async def detect_teeth(file: UploadFile = File(...)):
+
+
+rcnn_model = models.get_faster_rcnn_model()
+
+
+label_mapper = ToothLabelMapper()
+nms_processor = UniqueClassNMSProcessor(iou_threshold=0.5) 
+
+@app.post("/detections/faster-rcnn")
+async def detect_teeth_rcnn(file: UploadFile = File(...)):
     """
     Example endpoint that:
       - Reads the incoming X-ray image
@@ -77,7 +57,6 @@ async def detect_teeth(file: UploadFile = File(...)):
       - Decodes class indices to FDI numbers using label_mapper.decode
       - Returns the final bounding boxes + scores + FDI labels + PNG image
     """
-    print("Processing image...")
     contents = await file.read()
     image = Image.open(io.BytesIO(contents)).convert("RGB")
 
@@ -92,7 +71,7 @@ async def detect_teeth(file: UploadFile = File(...)):
     image_tensor = image_tensor.to(device)
 
     with torch.no_grad():
-        prediction = model([image_tensor])[0]
+        prediction = rcnn_model([image_tensor])[0]
 
     boxes_cpu = prediction["boxes"].cpu().numpy()
     scores_cpu = prediction["scores"].cpu().numpy()

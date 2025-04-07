@@ -79,7 +79,7 @@ export default function XrayAnalyzer() {
       formData.append("file", file)
 
       // Send to API
-      const response = await fetch("http://localhost:8000/detections/", {
+      const response = await fetch("http://localhost:8000/detections/faster-rcnn", {
         method: "POST",
         body: formData,
       })
@@ -339,18 +339,15 @@ export default function XrayAnalyzer() {
                       </div>
                     </div>
                 </TabsContent>
-              </Tabs>
+              </Tabs> 
 
-            {processedImage && (
-              <div className="mt-4">
-                <Separator className="my-4" />
-                <ToothChartSvg presentTeeth={detections?.labels} />
-              </div>
-            )}      
-
-              {/* If we've got detection data, show it */}
+            {/* If we've got detection data, show it */}
               {processedImage && detections && activeTab === "processed" && (
                 <div className="mt-4">
+
+                  <Separator className="my-4" />
+                  <ToothChartSvg presentTeeth={detections?.labels} />
+
                   <Separator className="my-4" />
                   <h3 className="text-md font-medium text-black mb-2">
                     Detection Results
