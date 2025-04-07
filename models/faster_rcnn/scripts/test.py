@@ -34,8 +34,8 @@ if __name__ == "__main__":
 
     test_loader = DataLoader(test_dataset, batch_size=config["batch_size"], num_workers=0, pin_memory=True, collate_fn=TeethDataset.collate_fn)
 
-    checkpoint = os.path.join(config["checkpoints_path"], "faster_rcnn", "version_0", "epoch=44-val_loss=0.94.ckpt")
-    
+    # checkpoint = os.path.join(config["checkpoints_path"], "faster_rcnn", "version_0", "epoch=44-val_loss=0.94.ckpt")
+    checkpoint = os.path.join(config["checkpoints_path"], "faster_rcnn", "version_1", "epoch=19-val_loss=0.90.ckpt")
     model = FasterRCNN.load_from_checkpoint(checkpoint)
 
     trainer = pl.Trainer(

@@ -22,6 +22,8 @@ python -m models.yolov11.scripts.train
 python -m models.yolov11.scripts.val
 tensorboard --logdir=runs/detect/train
 
+# to vizualize the results of the yolo, faster_rcnn models, run the following command:
+python -m models.visualize_results
 
 
 #utils

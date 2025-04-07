@@ -5,8 +5,22 @@ Test: 64 unique images, 1801 bboxes
 
 Faster RCNN
 version 0: with early stopping, learn monitor all that, it was 18 hours, results not so good
-version 1: without early stopping, learn monitor was slightly better
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│          val_map          │    0.43936070799827576    │
+│        val_map_50         │    0.8906501531600952     │
+│        val_map_75         │    0.3690766990184784     │
+│       val_map_large       │    0.44010668992996216    │
+│      val_map_medium       │    0.39364686608314514    │
+└───────────────────────────┴───────────────────────────┘
 
+version 1: without early stopping, learn monitor was slightly better, 9 hours
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│          val_map          │    0.45959922671318054    │
+│        val_map_50         │    0.8831766843795776     │
+│        val_map_75         │    0.4256598949432373     │
+│       val_map_large       │    0.4608173072338104     │
+│      val_map_medium       │    0.31944718956947327    │
+└───────────────────────────┴───────────────────────────┘
 
 DETR
 version_0 on 20 epochs without any augmentations/transformations/manipulations of the iamges/bboxes i had bad results
