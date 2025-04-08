@@ -1,7 +1,7 @@
 import os
 import yaml
 from models.faster_rcnn.faster_rcnn import FasterRCNN
-
+from ultralytics import YOLO
 
 class FineTunedModels:
     def __init__(self, device):
@@ -30,4 +30,9 @@ class FineTunedModels:
         model = FasterRCNN.load_from_checkpoint(checkpoint)
         model.eval()
         model.to(self.device)
+        return model
+    
+    def get_yolo_model(self):
+        checkpoint = os.path.join("runs", "detect", "train", "weights", "best.pt")
+        model = YOLO(checkpoint)
         return model
