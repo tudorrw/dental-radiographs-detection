@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { useDropzone } from "react-dropzone"
-import { Upload, X, ZoomIn, ZoomOut, Move, Loader2, Download, Info, ImageIcon, ActivityIcon } from "lucide-react"
+import { Upload, X, ZoomIn, ZoomOut, Move, Loader2, Download, Info, ImageIcon, ActivityIcon, RefreshCcw } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -18,9 +18,13 @@ export default function XrayAnalyzer() {
   const [preview, setPreview] = useState<string | null>(null)
   const [processedImage, setProcessedImage] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
-  const [zoom, setZoom] = useState(100)
-  // Keep track of which tab is active
   const [activeTab, setActiveTab] = useState<"original" | "processed">("original")
+
+  const [selectedModel, setSelectedModel] = useState<string>("faster-rcnn")
+  const [models, setModels] = useState<string[]>(["faster-rcnn", "yolov11", "detr", "meta-model"])
+  const [modelsAsString, setModelsAsString] = useState<string[]>(["Faster-RCNN", "YOLOv11", "DETR", "Meta-Model"])
+  const [selectedModelName, setSelectedModelName] = useState<string>(modelsAsString[0])
+
   // Store detection data (or null if not processed yet)
   const [detections, setDetections] = useState<{
     boxes: number[][],
@@ -29,7 +33,8 @@ export default function XrayAnalyzer() {
     // tooth_labels?: string[],
   } | null>(null)
   
-    // New state for advanced zoom and pan functionality
+    // states for (advanced) zoom and pan functionality
+    const [zoom, setZoom] = useState(100)
     const [position, setPosition] = useState({ x: 0, y: 0 })
     const [isDragging, setIsDragging] = useState(false)
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
@@ -43,7 +48,7 @@ export default function XrayAnalyzer() {
     },
     maxFiles: 1,
     onDrop: (acceptedFiles) => {
-      // 1. Just store the file & preview in state; NO automatic API call
+      //store the file & preview in state; NO automatic API call
       if (acceptedFiles.length > 0) {
         setFiles(acceptedFiles)
 
@@ -93,9 +98,13 @@ export default function XrayAnalyzer() {
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (isDragging && zoom > 100) {
-      console.log(isDragging)
+      
       const newX = e.clientX - dragStart.x
       const newY = e.clientY - dragStart.y
+
+      console.log("previous position", dragStart.x, dragStart.y)
+      console.log("new position", newX, newY)
+
 
       // Calculate boundaries to prevent dragging too far
       const container = imageContainerRef.current
@@ -123,8 +132,7 @@ export default function XrayAnalyzer() {
   const handleWheel = (e: React.WheelEvent) => {
     // Only handle wheel events when Ctrl key is pressed
     if (e.ctrlKey) {
-      e.preventDefault()
-      console.log("Zooming with wheel...")
+      // e.preventDefault()
       // Determine zoom direction
       const delta = e.deltaY < 0 ? 10 : -10
 
@@ -138,6 +146,46 @@ export default function XrayAnalyzer() {
   /**
    * call this when the user explicitly requests an analysis
    */
+
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      setIsDragging(false)
+    }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only handle keyboard shortcuts when image is hovered or container is focused
+      if (isImageHovered || document.activeElement === imageContainerRef.current) {
+        if (e.key === "+" || e.key === "=") {
+          e.preventDefault()
+          zoomIn()
+        } else if (e.key === "-" || e.key === "_") {
+          e.preventDefault()
+          zoomOut()
+        } else if (e.key === "0") {
+          e.preventDefault()
+          resetZoom()
+        }
+      }
+    }
+    // Prevent the default browser zoom behavior on Ctrl+wheel
+    const preventDefaultZoom = (e: WheelEvent) => {
+      if (e.ctrlKey && isImageHovered) {
+        e.preventDefault()
+      }
+    }
+
+    window.addEventListener("mouseup", handleGlobalMouseUp)
+    window.addEventListener("keydown", handleKeyDown)
+    window.addEventListener("wheel", preventDefaultZoom, { passive: false })
+
+    return () => {
+      window.removeEventListener("mouseup", handleGlobalMouseUp)
+      window.removeEventListener("keydown", handleKeyDown)
+      window.removeEventListener("wheel", preventDefaultZoom)
+    }
+  }, [isImageHovered, zoom])
+
+
+
   const handleAnalyze = async () => {
     if (!preview) return
     setIsProcessing(true)
@@ -161,7 +209,7 @@ export default function XrayAnalyzer() {
       formData.append("file", file)
 
       // Send to API
-      const response = await fetch("http://localhost:8000/detections/faster-rcnn", {
+      const response = await fetch(`http://localhost:8000/detections/${selectedModel}`, {
         method: "POST",
         body: formData,
       })
@@ -183,45 +231,6 @@ export default function XrayAnalyzer() {
     }
   }
 
-  useEffect(() => {
-    const handleGlobalMouseUp = () => {
-      setIsDragging(false)
-    }
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Only handle keyboard shortcuts when image is hovered or container is focused
-      if (isImageHovered || document.activeElement === imageContainerRef.current) {
-        if (e.key === "+" || e.key === "=") {
-          e.preventDefault()
-          zoomIn()
-        } else if (e.key === "-" || e.key === "_") {
-          e.preventDefault()
-          zoomOut()
-        } else if (e.key === "0") {
-          e.preventDefault()
-          resetZoom()
-        }
-      }
-    }
-
-    // Prevent the default browser zoom behavior on Ctrl+wheel
-    const preventDefaultZoom = (e: WheelEvent) => {
-      if (e.ctrlKey && isImageHovered) {
-        e.preventDefault()
-      }
-    }
-
-    window.addEventListener("mouseup", handleGlobalMouseUp)
-    window.addEventListener("keydown", handleKeyDown)
-    window.addEventListener("wheel", preventDefaultZoom, { passive: false })
-
-    return () => {
-      window.removeEventListener("mouseup", handleGlobalMouseUp)
-      window.removeEventListener("keydown", handleKeyDown)
-      window.removeEventListener("wheel", preventDefaultZoom)
-    }
-  }, [isImageHovered, zoom])
-
   const resetImage = () => {
     setFiles([])
     setPreview(null)
@@ -230,6 +239,13 @@ export default function XrayAnalyzer() {
     setActiveTab("original")
     resetZoom()
   }
+
+  const resetProcessedResults = () => {
+    setProcessedImage(null)
+    setDetections(null)
+    setActiveTab("original")
+  }
+
 
   return (
     <div className="container mx-auto py-8 px-4">
@@ -287,6 +303,7 @@ export default function XrayAnalyzer() {
                     </p>
                   </div>
                 </div>
+                {/* "X" button in case you wan to clear the image from cache */}
                 <Button
                   variant="ghost"
                   size="icon"
@@ -335,25 +352,116 @@ export default function XrayAnalyzer() {
               </div>
 
               {/* The user must click this to call the detection API */}
-              {!processedImage && (
-                <Button
-                  variant="default"
-                  onClick={handleAnalyze}
-                  disabled={isProcessing}
-                  className="w-full"
-                >
-                  {isProcessing ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Analyzing...
-                    </>
-                  ) : (
-                    <>
-                      <ActivityIcon className="h-4 w-4 mr-2" />
-                      Process Analysis
-                    </>
-                  )}
-                </Button>
+              {/* The user must click this to call the detection API */}
+              {!processedImage ? (
+                <>
+                  {/* Model selection */}
+                  <div className="mt-4 mb-4">
+                    <h3 className="text-md font-medium text-black mb-2">Select Detection Model</h3>
+                    <div className="bg-white rounded-lg border border-gray-200 p-1">
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>  {
+                            setSelectedModel(models[0])
+                            setSelectedModelName(modelsAsString[0])  
+                          }}
+                          className={cn(
+                            "py-2 px-3 rounded-md text-sm font-medium transition-colors",
+                            selectedModel === models[0]
+                              ? "bg-cyan-100 text-cyan-700 border-b-2 border-cyan-500"
+                              : "text-gray-600 hover:bg-gray-100",
+                          )}
+                        >
+                          {/* Faster-RCNN */}
+                          {modelsAsString[0]}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>  {
+                            setSelectedModel(models[1])
+                            setSelectedModelName(modelsAsString[1])  
+                          }}
+                          className={cn(
+                            "py-2 px-3 rounded-md text-sm font-medium transition-colors",
+                            selectedModel === models[1]
+                              ? "bg-cyan-100 text-cyan-700 border-b-2 border-cyan-500"
+                              : "text-gray-600 hover:bg-gray-100",
+                          )}
+                        >
+                          {/* YOLOv11 */}
+                          {modelsAsString[1]}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>  {
+                            setSelectedModel(models[2])
+                            setSelectedModelName(modelsAsString[2])  
+                          }}
+                          className={cn(
+                            "py-2 px-3 rounded-md text-sm font-medium transition-colors",
+                            selectedModel === models[2]
+                              ? "bg-cyan-100 text-cyan-700 border-b-2 border-cyan-500"
+                              : "text-gray-600 hover:bg-gray-100",
+                          )}
+                        >
+                          {/* DETR */}
+                          {modelsAsString[2]} (DEtection TRansformer)
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>  {
+                            setSelectedModel(models[3])
+                            setSelectedModelName(modelsAsString[3])  
+                          }}
+                          className={cn(
+                            "py-2 px-3 rounded-md text-sm font-medium transition-colors",
+                            selectedModel === models[3]
+                              ? "bg-cyan-100 text-cyan-700 border-b-2 border-cyan-500"
+                              : "text-gray-600 hover:bg-gray-100",
+                          )}
+                        >
+                          {/* Meta-Model */}
+                          {modelsAsString[3]} (All Models Combined)
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <Button variant="default" onClick={handleAnalyze} disabled={isProcessing} className="w-full">
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Analyzing with {selectedModelName}...
+                      </>
+                    ) : (
+                      <>
+                        <ActivityIcon className="h-4 w-4 mr-2" />
+                        Process with {selectedModelName}
+                      </>
+                    )}
+                  </Button>
+                </>
+              ) : (
+                <div className="mt-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-md font-medium text-black">Try Another Model</h3>
+
+                    <div className="flex gap-2">
+                      <span className="text-xs text-gray-500">Current:</span>
+                      <span className="text-xs text-cyan-600 font-medium">{selectedModelName}</span>
+                    </div>
+                    
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={resetProcessedResults}
+                    className="w-full flex items-center justify-center"
+                  >
+                    <RefreshCcw className="h-4 w-4 mr-2"/>
+                    Reset Analysis & Try Another Model
+                  </Button>
+                </div>
               )}
             </div>
           )}
