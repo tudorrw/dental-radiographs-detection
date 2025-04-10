@@ -44,14 +44,14 @@ def draw_boxes(clahe_pil, final_boxes, predicted_quadrants, predicted_teeth):
     draw_image = clahe_pil.copy()
     image_height = draw_image.height
     draw = ImageDraw.Draw(draw_image)
-    font=ImageFont.truetype("arial.ttf", 26)
+    font=ImageFont.truetype("arial.ttf", 22)
 
     for box, pQuad, pTooth in zip(final_boxes, predicted_quadrants, predicted_teeth):
         x_min, y_min, x_max, y_max = box
 
         color = quadrant_color(pQuad)
 
-        draw.rectangle([x_min, y_min, x_max, y_max], outline=color, width=6)
+        draw.rectangle([x_min, y_min, x_max, y_max], outline=color, width=3)
         if pQuad in [1, 2]:
             text_y = max(0, y_min - 60)
         else:
