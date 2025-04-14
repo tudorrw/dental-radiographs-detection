@@ -60,7 +60,6 @@ if __name__ == "__main__":
         monitor="val_loss", 
         mode="min", 
         save_top_k=2,
-        save_last=True,
         filename="{epoch:02d}-{val_loss:.2f}"
     )
 
@@ -79,7 +78,6 @@ if __name__ == "__main__":
         devices=1,
         logger=logger,
         callbacks=[checkpoint_callback],
-        check_val_every_n_epoch=5,
     )
 
     # Train

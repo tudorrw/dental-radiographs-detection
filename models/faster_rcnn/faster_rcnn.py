@@ -1,7 +1,7 @@
+import os
 import torch
 import pytorch_lightning as L
 import numpy as np
-import os
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection import fasterrcnn_resnet50_fpn, FasterRCNN_ResNet50_FPN_Weights, fasterrcnn_resnet50_fpn_v2, FasterRCNN_ResNet50_FPN_V2_Weights
 from torchvision.models.resnet import ResNet50_Weights
@@ -45,6 +45,11 @@ class FasterRCNN(L.LightningModule):
         # self.model = fasterrcnn_resnet50_fpn(pretrained=True)
         in_features = self.model.roi_heads.box_predictor.cls_score.in_features
         self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes=self.num_classes)
+        # freeze layers 
+        # for name, param in self.model.backbone.body.named_parameters():
+        #     if "layer1" in name or "layer2" in name:
+        #         param.requires_grad = False
+
  
         # Detection metrics
         self.metric = MeanAveragePrecision(box_format="xyxy")
@@ -214,7 +219,9 @@ class FasterRCNN(L.LightningModule):
         plt.figure(figsize=(16, 14))
         
         # Normalize confusion matrix for better visualization
-        cm_norm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+        row_sums = cm.sum(axis=1)[:, np.newaxis]
+        cm_norm = np.divide(cm.astype('float'), row_sums, out=np.zeros_like(cm, dtype=float), where=row_sums != 0)
+
         cm_norm = np.nan_to_num(cm_norm)  # Replace NaN with 0
         
         # Create heatmap with class names
@@ -244,7 +251,8 @@ class FasterRCNN(L.LightningModule):
         
         # Calculate and log precision, recall, and F1 score
         precision = np.diag(cm) / np.sum(cm, axis=0)
-        recall = np.diag(cm) / np.sum(cm, axis=1)
+        recall = np.divide(np.diag(cm), np.sum(cm, axis=1), out=np.zeros_like(np.diag(cm), dtype=float), where=np.sum(cm, axis=1) != 0)
+
         f1_score = 2 * precision * recall / (precision + recall)
         
         # Replace NaN with 0
@@ -334,5 +342,24 @@ class FasterRCNN(L.LightningModule):
                 })
         
         return predictions
+    
     def configure_optimizers(self):
-        return torch.optim.SGD(self.model.parameters(), lr=self.learning_rate, momentum=self.momentum)
+        optimizer = torch.optim.SGD(
+            params=self.parameters(),
+            lr=self.learning_rate,
+            momentum=self.momentum,
+        )
+        return optimizer
+        # scheduler = torch.optim.lr_scheduler.ExponentialLR(
+        #     optimizer, 
+        #     gamma=0.9  
+        # )
+        # # 5) Return the config as a dict
+        # return {
+        #     "optimizer": optimizer,
+        #     "lr_scheduler": {
+        #         "scheduler": scheduler,
+        #         "interval": "epoch",  # step each epoch
+        #         "frequency": 1,
+        #     },
+        # }
