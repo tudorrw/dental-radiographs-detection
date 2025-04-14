@@ -10,7 +10,7 @@ def val_yolo_model():
     model = YOLO(CHECKPOINTS_FOLDER, task="val")  # build from YAML and transfer weights
     # model.add_callback("on_pretrain_routine_end", callback_custom_albumentations)    # Train model
 
-    metrics = model.val(data=CFG_PATH, epochs=50, imgsz=640, batch=4, iou=0.6, conf=0.25)  # train
+    metrics = model.val(data=CFG_PATH, epochs=50, imgsz=640, batch=4, iou=0.6, conf=0.25)  # validate
     metrics.box.map
     metrics.box.map50
     metrics.box.map75
