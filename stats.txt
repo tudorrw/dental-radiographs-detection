@@ -21,6 +21,16 @@ version 1: without early stopping, learn monitor was slightly better, 9 hours
 │       val_map_large       │    0.4608173072338104     │
 │      val_map_medium       │    0.31944718956947327    │
 └───────────────────────────┴───────────────────────────┘
+version 2: adding some learning rate by reducing it with 0.1
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│          val_map          │    0.48439276218414307    │
+│        val_map_50         │    0.9203251004219055     │
+│        val_map_75         │    0.4415581524372101     │
+│       val_map_large       │    0.48518237471580505    │
+│      val_map_medium       │    0.4024752378463745     │
+version_3 freeze 2 layers, change the lr with eponential decay, let's what 
+
+
 
 DETR
 version_0 on 20 epochs without any augmentations/transformations/manipulations of the iamges/bboxes i had bad results
@@ -33,3 +43,29 @@ could be more precise with the bounding box placement
 
 
 train_58 from unlabelled problem on 38
+
+
+
+RetinaNet
+
+version_0: only for 10 epochs, it suffers from overfitting from early stages, it learns too good at the beginning, that in overfits
+version_1: same as the version_0, it has stopped in epoch 13 cause of the patience of 8 in the early stages
+both had a learning rate of 0.01
+version_2: patience after 20 epochs, on epoch 9 it is still learning, learning rate at 0.001 
+trained on batch size of 4
+│          val_map          │    0.48202720284461975    │
+│        val_map_50         │    0.9028496146202087     │
+│        val_map_75         │    0.44528448581695557    │
+
+yolo
+
+mAP (50-95): 0.5719267423533061
+mAP50: 0.9376784057836736
+mAP75: 0.611076831059472
+
+
+
+boxes fusion
+│ map                      │         0.5191022753715515 │
+│ map_50                   │         0.9329639077186584 │
+│ map_75                   │         0.5032194256782532 │

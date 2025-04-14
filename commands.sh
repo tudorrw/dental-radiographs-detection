@@ -10,6 +10,7 @@ python -m models.faster_rcnn.scripts.visualize_ground_truth
 python -m models.faster_rcnn.scripts.train
 python -m models.faster_rcnn.scripts.test
 python -m models.faster_rcnn.scripts.predict
+python -m models.faster_rcnn.params
 tensorboard --logdir=checkpoints/faster_rcnn
 
 # commands for detr
@@ -20,12 +21,17 @@ tensorboard --logdir=checkpoints/detr
 # commands for yolo 11
 python -m models.yolov11.scripts.train
 python -m models.yolov11.scripts.val
+python -m models.yolov11.scripts.test
 tensorboard --logdir=runs/detect/train
+
+# commands for retinanet
+python -m models.retinanet.scripts.train
+tensorboard --logdir=checkpoints/retinanet
 
 # to vizualize the results of the yolo, faster_rcnn models, run the following command:
 python -m models.visualize_results
 
-
+python -m models.meta_model
 #utils
 # run frontend
 cd ui
