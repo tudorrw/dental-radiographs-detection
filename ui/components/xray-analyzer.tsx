@@ -21,8 +21,8 @@ export default function XrayAnalyzer() {
   const [activeTab, setActiveTab] = useState<"original" | "processed">("original")
 
   const [selectedModel, setSelectedModel] = useState<string>("faster-rcnn")
-  const [models, setModels] = useState<string[]>(["faster-rcnn", "yolov11", "detr", "meta-model"])
-  const [modelsAsString, setModelsAsString] = useState<string[]>(["Faster-RCNN", "YOLOv11", "DETR", "Meta-Model"])
+  const [models, setModels] = useState<string[]>(["faster-rcnn", "yolov11", "retinanet", "meta-model"])
+  const [modelsAsString, setModelsAsString] = useState<string[]>(["Faster-RCNN", "YOLOv11", "RetinaNet", "Meta-Model"])
   const [selectedModelName, setSelectedModelName] = useState<string>(modelsAsString[0])
 
   // Store detection data (or null if not processed yet)
@@ -406,7 +406,7 @@ export default function XrayAnalyzer() {
                           )}
                         >
                           {/* DETR */}
-                          {modelsAsString[2]} (DEtection TRansformer)
+                          {modelsAsString[2]}
                         </button>
 
                         <button
