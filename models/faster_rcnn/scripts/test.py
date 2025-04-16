@@ -16,7 +16,7 @@ if __name__ == "__main__":
 # Navigate to the "faster_rcnn" folder where cfg.yaml is located
     CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "cfg.yaml")
 
-    print("Starting training...")
+    print("Starting testing...")
     with open(CONFIG_PATH, "r") as f:
         config = yaml.safe_load(f)
 
@@ -34,9 +34,9 @@ if __name__ == "__main__":
 
     test_loader = DataLoader(test_dataset, batch_size=config["batch_size"], num_workers=0, pin_memory=True, collate_fn=TeethDataset.collate_fn)
 
-    # checkpoint = os.path.join(config["checkpoints_path"], "faster_rcnn", "version_0", "epoch=44-val_loss=0.94.ckpt")
-    # checkpoint = os.path.join(config["checkpoints_path"], "faster_rcnn", "version_1", "epoch=19-val_loss=0.90.ckpt")
-    checkpoint = os.path.join(config["checkpoints_path"], "faster_rcnn", "version_2", "epoch=27-val_loss=0.85.ckpt")
+    checkpoint = os.path.join(config["checkpoints_path"], "faster_rcnn", "version_1", "epoch=27-val_loss=0.85.ckpt")
+    # checkpoint = os.path.join(config["checkpoints_path"], "faster_rcnn", "version_4", "epoch=17-val_loss=0.91.ckpt")
+    # checkpoint = os.path.join(config["checkpoints_path"], "faster_rcnn", "version_3", "epoch=24-val_loss=0.92.ckpt")
     model = FasterRCNN.load_from_checkpoint(checkpoint)
 
     trainer = pl.Trainer(

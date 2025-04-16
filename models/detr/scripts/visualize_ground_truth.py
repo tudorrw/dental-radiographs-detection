@@ -15,13 +15,16 @@ import albumentations as A
 
 def get_augmentations(): 
     return A.Compose([
-        # A.NoOp()
-        # A.VerticalFlip(p=0.2),
-        # A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.05, rotate_limit=5, p=1.0),
-        # A.RandomBrightnessContrast(p=1.0),
-        A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.05, rotate_limit=5, p=1.0),
-            # A.RandomGamma(gamma_limit=(80, 120), p=1.0),
-        A.CLAHE(clip_limit=2.0, tile_grid_size=(16,16), p=0.5),
+        A.RandomBrightnessContrast(p=.5),
+        A.ShiftScaleRotate(p=.5,
+                        shift_limit=0.05,
+                        rotate_limit=10),
+        A.CoarseDropout(num_holes_range=(5,5),
+                hole_height_range=(70,80),
+                hole_width_range=(70,80),
+                fill=128,
+                p=1.0),
+        # A.CLAHE(clip_limit=2.0, tile_grid_size=(16,16), p=0.5),
     ],
     bbox_params=A.BboxParams(format='coco',label_fields=["category_ids"], clip=True)
     )

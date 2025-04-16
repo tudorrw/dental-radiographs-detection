@@ -1,17 +1,16 @@
 import os
-import torch
-import pytorch_lightning as L
-import numpy as np
-from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
-from torchvision.models.detection import fasterrcnn_resnet50_fpn, FasterRCNN_ResNet50_FPN_Weights, fasterrcnn_resnet50_fpn_v2, FasterRCNN_ResNet50_FPN_V2_Weights
-from torchvision.models.resnet import ResNet50_Weights
- 
-import matplotlib.pyplot as plt
-from torchmetrics.detection.mean_ap import MeanAveragePrecision
-from sklearn.metrics import confusion_matrix
-import seaborn as sns
-from utils.mapper import ToothLabelMapper
 import csv 
+import torch
+import numpy as np
+import torch.nn as nn
+import seaborn as sns
+import pytorch_lightning as L
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix
+from torchmetrics.detection.mean_ap import MeanAveragePrecision
+from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+from torchvision.models.detection import fasterrcnn_resnet50_fpn, FasterRCNN_ResNet50_FPN_Weights, fasterrcnn_resnet50_fpn_v2, FasterRCNN_ResNet50_FPN_V2_Weights 
+from torchvision.models.vgg import vgg16, VGG16_Weights
 
 '''
 Faster R-CNN processes the image:
@@ -36,21 +35,15 @@ class FasterRCNN(L.LightningModule):
         self.num_classes = num_classes
         self.learning_rate = learning_rate
         self.momentum = momentum
-        # self.model = fasterrcnn_resnet50_fpn(
-        #     weights=FasterRCNN_ResNet50_FPN_Weights.COCO_V1           
-        #     )
+        self.dropout_prob = 0.25
         self.model = fasterrcnn_resnet50_fpn(
-            weights=FasterRCNN_ResNet50_FPN_Weights.DEFAULT           
+            weights=FasterRCNN_ResNet50_FPN_Weights.DEFAULT     
             )
-        # self.model = fasterrcnn_resnet50_fpn(pretrained=True)
+        # self._add_dropout_to_mlp_head()
         in_features = self.model.roi_heads.box_predictor.cls_score.in_features
-        self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes=self.num_classes)
-        # freeze layers 
-        # for name, param in self.model.backbone.body.named_parameters():
-        #     if "layer1" in name or "layer2" in name:
-        #         param.requires_grad = False
+        # self.model.roi_heads.box_predictor = self._create_predictor_with_dropout(in_features, self.num_classes)
+        self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features, self.num_classes)
 
- 
         # Detection metrics
         self.metric = MeanAveragePrecision(box_format="xyxy")
         
@@ -343,11 +336,92 @@ class FasterRCNN(L.LightningModule):
         
         return predictions
     
+    def _create_predictor_with_dropout(self, in_features, num_classes):
+        """
+        Create a custom Fast R-CNN predictor with dropout layers.
+        """
+        # Create a custom box predictor with dropout
+        class CustomFastRCNNPredictor(torch.nn.Module):
+            def __init__(self, in_channels, num_classes, dropout_prob):
+                super(CustomFastRCNNPredictor, self).__init__()
+                self.cls_score = torch.nn.Sequential(
+                    torch.nn.Dropout(p=dropout_prob),
+                    torch.nn.Linear(in_channels, num_classes)
+                )
+                self.bbox_pred = torch.nn.Sequential(
+                    torch.nn.Dropout(p=dropout_prob),
+                    torch.nn.Linear(in_channels, num_classes * 4)
+                )
+            
+            def forward(self, x):
+                if x.dim() == 4:
+                    # Force batch dim if x has only 3 dimensions (1, C, H, W)
+                    assert x.size(0) == 1
+                    x = x.squeeze(0)
+                scores = self.cls_score(x)
+                bbox_deltas = self.bbox_pred(x)
+                return scores, bbox_deltas
+                
+        return CustomFastRCNNPredictor(in_features, num_classes, self.dropout_prob)
+    
+    def _add_dropout_to_mlp_head(self):
+        """
+        Modify the TwoMLPHead to include dropout before ReLU activations.
+        This is where we want to apply dropout to prevent overfitting.
+        
+        The MLP head consists of:
+        - fc6: Linear layer (12544 -> 1024)
+        - ReLU
+        - fc7: Linear layer (1024 -> 1024)
+        - ReLU
+        
+        We'll add dropout before each ReLU activation.
+        """
+        # Get the original MLP head
+        box_head = self.model.roi_heads.box_head
+        
+        # Create a custom TwoMLPHead with dropout
+        class CustomTwoMLPHead(torch.nn.Module):
+            def __init__(self, original_head, dropout_prob):
+                super(CustomTwoMLPHead, self).__init__()
+                
+                # Get the original layers
+                self.original_fc6 = original_head.fc6
+                self.original_fc7 = original_head.fc7
+                
+                # Create new sequential modules with dropout
+                self.fc6 = self.original_fc6  # Keep the original linear layer
+                self.dropout1 = torch.nn.Dropout(p=dropout_prob)
+                self.relu1 = torch.nn.ReLU(inplace=True)
+                
+                self.fc7 = self.original_fc7  # Keep the original linear layer
+                self.dropout2 = torch.nn.Dropout(p=dropout_prob)
+                self.relu2 = torch.nn.ReLU(inplace=True)
+                
+                print(f"Added dropout ({dropout_prob}) before ReLU in MLP head")
+            
+            def forward(self, x):
+                x = x.flatten(start_dim=1)
+                x = self.fc6(x)
+                x = self.dropout1(x)  # Add dropout before ReLU
+                x = self.relu1(x)
+                
+                x = self.fc7(x)
+                x = self.dropout2(x)  # Add dropout before ReLU
+                x = self.relu2(x)
+                
+                return x
+        
+        # Replace the box_head with our custom version
+        self.model.roi_heads.box_head = CustomTwoMLPHead(box_head, self.dropout_prob)
+
+
     def configure_optimizers(self):
         optimizer = torch.optim.SGD(
             params=self.parameters(),
             lr=self.learning_rate,
             momentum=self.momentum,
+            weight_decay=0.0001,
         )
         return optimizer
         # scheduler = torch.optim.lr_scheduler.ExponentialLR(

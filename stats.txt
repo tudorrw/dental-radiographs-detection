@@ -28,9 +28,8 @@ version 2: adding some learning rate by reducing it with 0.1
 │        val_map_75         │    0.4415581524372101     │
 │       val_map_large       │    0.48518237471580505    │
 │      val_map_medium       │    0.4024752378463745     │
-version_3 freeze 2 layers, change the lr with eponential decay, let's what 
-
-
+version_3 add dropout on class predictor, not so good
+version_4 add dropout on mlp and also data augmentations
 
 DETR
 version_0 on 20 epochs without any augmentations/transformations/manipulations of the iamges/bboxes i had bad results

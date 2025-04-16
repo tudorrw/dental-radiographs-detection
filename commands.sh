@@ -4,6 +4,7 @@ conda activate dental-dl
 
 # split the data
 python -m data.utils.train_test_val_split
+python -m data.utils.train_test_split_for_kfolds
 
 # commands for faster rcnn
 python -m models.faster_rcnn.scripts.visualize_ground_truth
@@ -26,6 +27,7 @@ tensorboard --logdir=runs/detect/train
 
 # commands for retinanet
 python -m models.retinanet.scripts.train
+python -m models.retinanet.params
 tensorboard --logdir=checkpoints/retinanet
 
 # to vizualize the results of the yolo, faster_rcnn models, run the following command:

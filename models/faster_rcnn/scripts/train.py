@@ -62,14 +62,11 @@ if __name__ == "__main__":
         save_top_k=2,
         filename="{epoch:02d}-{val_loss:.2f}"
     )
-
-    lr_monitor = LearningRateMonitor(logging_interval="epoch")
     
     early_stopping = EarlyStopping(
         monitor="val_loss",
         patience=10,  # Stop after 10 epochs without improvement
         mode="min",
-        verbose=True
     )
     
     trainer = pl.Trainer(
@@ -77,7 +74,7 @@ if __name__ == "__main__":
         accelerator="gpu",
         devices=1,
         logger=logger,
-        callbacks=[checkpoint_callback],
+        callbacks=[checkpoint_callback, early_stopping],
     )
 
     # Train
