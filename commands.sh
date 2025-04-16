@@ -41,3 +41,5 @@ npm run dev
 
 # run backend
 uvicorn api.app:app --reload
+
+eval "$(/root/miniconda3/bin/conda shell.bash hook)"
