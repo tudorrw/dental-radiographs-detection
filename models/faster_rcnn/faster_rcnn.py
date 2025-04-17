@@ -39,11 +39,10 @@ class FasterRCNN(L.LightningModule):
         self.model = fasterrcnn_resnet50_fpn(
             weights=FasterRCNN_ResNet50_FPN_Weights.DEFAULT     
             )
-        # self._add_dropout_to_mlp_head()
+        self._add_dropout_to_backbone()
         in_features = self.model.roi_heads.box_predictor.cls_score.in_features
-        # self.model.roi_heads.box_predictor = self._create_predictor_with_dropout(in_features, self.num_classes)
         self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features, self.num_classes)
-
+        print(f"Model: {self.model}")
         # Detection metrics
         self.metric = MeanAveragePrecision(box_format="xyxy")
         
@@ -336,84 +335,74 @@ class FasterRCNN(L.LightningModule):
         
         return predictions
     
-    def _create_predictor_with_dropout(self, in_features, num_classes):
+
+    def _add_dropout_to_backbone(self):
         """
-        Create a custom Fast R-CNN predictor with dropout layers.
+        Add dropout after each bottleneck block in the ResNet50 backbone.
+        Each bottleneck has the structure:
+        conv1 -> bn1 -> relu -> conv2 -> bn2 -> relu -> conv3 -> bn3 -> add identity -> relu
+        
+        We'll add dropout after each ReLU in the bottleneck blocks to prevent overfitting.
         """
-        # Create a custom box predictor with dropout
-        class CustomFastRCNNPredictor(torch.nn.Module):
-            def __init__(self, in_channels, num_classes, dropout_prob):
-                super(CustomFastRCNNPredictor, self).__init__()
-                self.cls_score = torch.nn.Sequential(
-                    torch.nn.Dropout(p=dropout_prob),
-                    torch.nn.Linear(in_channels, num_classes)
-                )
-                self.bbox_pred = torch.nn.Sequential(
-                    torch.nn.Dropout(p=dropout_prob),
-                    torch.nn.Linear(in_channels, num_classes * 4)
-                )
-            
+        backbone = self.model.backbone.body  # This is the ResNet50 backbone
+        
+        # Custom bottleneck with dropout
+        class BottleneckWithDropout(nn.Module):
+            def __init__(self, original_bottleneck, dropout_prob):
+                super(BottleneckWithDropout, self).__init__()
+                
+                # Copy all attributes from the original bottleneck
+                self.conv1 = original_bottleneck.conv1
+                self.bn1 = original_bottleneck.bn1
+                self.conv2 = original_bottleneck.conv2
+                self.bn2 = original_bottleneck.bn2
+                self.conv3 = original_bottleneck.conv3
+                self.bn3 = original_bottleneck.bn3
+                self.relu = original_bottleneck.relu
+                # self.downsample = original_bottleneck.downsample
+                # self.stride = original_bottleneck.stride
+                # 
+                # Add dropout layer
+                self.dropout = nn.Dropout(p=dropout_prob)
+                
             def forward(self, x):
-                if x.dim() == 4:
-                    # Force batch dim if x has only 3 dimensions (1, C, H, W)
-                    assert x.size(0) == 1
-                    x = x.squeeze(0)
-                scores = self.cls_score(x)
-                bbox_deltas = self.bbox_pred(x)
-                return scores, bbox_deltas
+                identity = x
                 
-        return CustomFastRCNNPredictor(in_features, num_classes, self.dropout_prob)
-    
-    def _add_dropout_to_mlp_head(self):
-        """
-        Modify the TwoMLPHead to include dropout before ReLU activations.
-        This is where we want to apply dropout to prevent overfitting.
+                # First block with dropout
+                out = self.conv1(x)
+                out = self.bn1(out)
+                out = self.relu(out)
+                out = self.dropout(out)  # Add dropout after first ReLU
+                
+                # Second block with dropout
+                out = self.conv2(out)
+                out = self.bn2(out)
+                out = self.relu(out)
+                out = self.dropout(out)  # Add dropout after second ReLU
+                
+                # Third block
+                out = self.conv3(out)
+                out = self.bn3(out)
+                
+                # if self.downsample is not None:
+                #     identity = self.downsample(x)
+                
+                # Add identity connection
+                # out += identity
+                out = self.relu(out)
+                out = self.dropout(out)  # Add dropout after final ReLU
+                
+                return out
         
-        The MLP head consists of:
-        - fc6: Linear layer (12544 -> 1024)
-        - ReLU
-        - fc7: Linear layer (1024 -> 1024)
-        - ReLU
+        # Replace each bottleneck with our custom version
+        for layer_name in ['layer1', 'layer2', 'layer3', 'layer4']:
+            if hasattr(backbone, layer_name):
+                layer = getattr(backbone, layer_name)
+                # for i in range(len(layer)):
+                original_bottleneck = layer[-1]
+                layer[-1] = BottleneckWithDropout(original_bottleneck, self.dropout_prob)
         
-        We'll add dropout before each ReLU activation.
-        """
-        # Get the original MLP head
-        box_head = self.model.roi_heads.box_head
-        
-        # Create a custom TwoMLPHead with dropout
-        class CustomTwoMLPHead(torch.nn.Module):
-            def __init__(self, original_head, dropout_prob):
-                super(CustomTwoMLPHead, self).__init__()
-                
-                # Get the original layers
-                self.original_fc6 = original_head.fc6
-                self.original_fc7 = original_head.fc7
-                
-                # Create new sequential modules with dropout
-                self.fc6 = self.original_fc6  # Keep the original linear layer
-                self.dropout1 = torch.nn.Dropout(p=dropout_prob)
-                self.relu1 = torch.nn.ReLU(inplace=True)
-                
-                self.fc7 = self.original_fc7  # Keep the original linear layer
-                self.dropout2 = torch.nn.Dropout(p=dropout_prob)
-                self.relu2 = torch.nn.ReLU(inplace=True)
-                
-                print(f"Added dropout ({dropout_prob}) before ReLU in MLP head")
-            
-            def forward(self, x):
-                x = x.flatten(start_dim=1)
-                x = self.fc6(x)
-                x = self.dropout1(x)  # Add dropout before ReLU
-                x = self.relu1(x)
-                
-                x = self.fc7(x)
-                x = self.dropout2(x)  # Add dropout before ReLU
-                x = self.relu2(x)
-                
-                return x
-        
-        # Replace the box_head with our custom version
-        self.model.roi_heads.box_head = CustomTwoMLPHead(box_head, self.dropout_prob)
+        print(f"Added dropout ({self.dropout_prob}) after each ReLU in ResNet backbone bottlenecks")
 
 
     def configure_optimizers(self):
