@@ -1,0 +1,17 @@
+python-multipart
+fastapi
+ultralytics=8.3.96
+numpy==2.1.2
+opencv
+albumentations==2.0.5
+fastapi=0.115.12
+seaborn=0.13.2
+scikit-learn=1.6.1
+tensorboard=2.19.0
+tqdm=4.67.1
+uvicorn=0.32.1
+pillow==11.0.0
+pycocotools==2.0.8
+pandas=2.2.3
+lightning=2.5.0
+huggingface_hub=0.29.2
