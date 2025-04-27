@@ -3,10 +3,29 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import pytorch_lightning as L
 import numpy as np
 import torch.nn as nn
+import torch.nn.functional as F
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection import fasterrcnn_resnet50_fpn, FasterRCNN_ResNet50_FPN_Weights, fasterrcnn_resnet50_fpn_v2, FasterRCNN_ResNet50_FPN_V2_Weights
 from torchvision.models.resnet import ResNet50_Weights
 
+class TwoMLPHeadWithDropout(nn.Module):
+    def __init__(self, in_channels, representation_size, dropout_prob):
+        super(TwoMLPHeadWithDropout, self).__init__()
+        self.dropout_prob = dropout_prob
+
+        self.fc6 = nn.Linear(in_channels, representation_size)
+        self.dropout1 = nn.Dropout(self.dropout_prob)
+        self.fc7 = nn.Linear(representation_size, representation_size)
+        self.dropout2 = nn.Dropout(self.dropout_prob)
+
+    def forward(self, x):
+        x = x.flatten(start_dim=1)
+
+        x = F.relu(self.fc6(x))
+        x = self.dropout1(x)
+        x = F.relu(self.fc7(x))
+        x = self.dropout2(x)
+        return x
 
 def add_dropout_to_backbone(model, dropout_prob=0.5):
         """
@@ -79,8 +98,11 @@ def add_dropout_to_backbone(model, dropout_prob=0.5):
 
 
 model = fasterrcnn_resnet50_fpn(weights=FasterRCNN_ResNet50_FPN_Weights.DEFAULT)
-add_dropout_to_backbone(model, dropout_prob=0.5)
+# add_dropout_to_backbone(model, dropout_prob=0.5)
+
+
 in_features = model.roi_heads.box_predictor.cls_score.in_features
+
 model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes=33)
 print(model)
 # print(model.backbone.body.layer1[2])

@@ -173,12 +173,12 @@ def save_coco_json_quadrant(images, annotations, categories, dataset, save_path)
 # Main function
 def main():
     
-    dataset_types = ["quadrant", "quadrant_enumeration"]
+    dataset_types = ["quadrant_enumeration"]
     global train_id_set, val_id_set, test_id_set
     origin_path = "dataset/origin/"
     coco_base_path = "dataset/coco/"
     pascal_voc_base_path = "dataset/pascal_voc/"
-    yolo_base_path = "dataset/yolo/"
+    yolo_base_path = "dataset/yolo/classic"
 
     for path in [coco_base_path, pascal_voc_base_path, yolo_base_path]:
         os.makedirs(path, exist_ok=True)
@@ -195,8 +195,8 @@ def main():
 
                 # Split image IDs first to ensure VOC and COCO use the same splits
         all_image_ids = [img["id"] for img in dataset["images"]]
-        train_ids, temp_ids = train_test_split(all_image_ids, test_size=0.25, random_state=42)
-        val_ids, test_ids = train_test_split(temp_ids, test_size=0.4, random_state=42)
+        train_ids, temp_ids = train_test_split(all_image_ids, test_size=0.20, random_state=42)
+        val_ids, test_ids = train_test_split(temp_ids, test_size=0.5, random_state=42)
 
         # Convert to sets for faster lookups
         train_id_set = set(train_ids)

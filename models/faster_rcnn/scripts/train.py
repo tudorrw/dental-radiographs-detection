@@ -39,9 +39,9 @@ if __name__ == "__main__":
 
 
     # DataLoaders
-    train_loader = DataLoader(train_dataset, batch_size=config["batch_size"], num_workers=4, collate_fn=TeethDataset.collate_fn)
+    train_loader = DataLoader(train_dataset, batch_size=config["batch_size"], num_workers=8, collate_fn=TeethDataset.collate_fn)
 
-    val_loader = DataLoader(val_dataset, batch_size=config["batch_size"], num_workers=4, collate_fn=TeethDataset.collate_fn)
+    val_loader = DataLoader(val_dataset, batch_size=config["batch_size"], num_workers=8, collate_fn=TeethDataset.collate_fn)
 
     # Model
     model = FasterRCNN(num_classes=config["n_teeth"] + 1, learning_rate=float(config["learning_rate"]), momentum=float(config["momentum"]))

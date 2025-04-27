@@ -126,7 +126,7 @@ def k_fold_cross_validation(config, n_folds=10):
         checkpoint_callback = ModelCheckpoint(
             dirpath=fold_dir,
             monitor="val_loss",
-            mode="max",
+            mode="min",
             save_top_k=2,
             save_last=True,
             filename="{epoch:02d}-{val_loss:.4f}"
@@ -137,7 +137,7 @@ def k_fold_cross_validation(config, n_folds=10):
         early_stopping = EarlyStopping(
             monitor="val_loss",
             patience=10,
-            mode="max",
+            mode="min",
         )
         
         # Train model

@@ -64,12 +64,18 @@ if __name__ == "__main__":
         filename="{epoch:02d}-{val_loss:.2f}"
     )
 
+    early_stopping = EarlyStopping(
+        monitor="val_loss",
+        patience=10,  # Stop after 10 epochs without improvement
+        mode="min",
+    )
+
     trainer = pl.Trainer(
         max_epochs=config["max_epochs"],
         accelerator="gpu",
         devices=1,
         logger=logger,
-        callbacks=[checkpoint_callback],
+        callbacks=[checkpoint_callback, early_stopping],
         # check_val_every_n_epoch=1,
     )
 

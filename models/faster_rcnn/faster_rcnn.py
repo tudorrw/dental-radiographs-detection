@@ -6,11 +6,31 @@ import torch.nn as nn
 import seaborn as sns
 import pytorch_lightning as L
 import matplotlib.pyplot as plt
+import torch.nn.functional as F
 from sklearn.metrics import confusion_matrix
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection import fasterrcnn_resnet50_fpn, FasterRCNN_ResNet50_FPN_Weights, fasterrcnn_resnet50_fpn_v2, FasterRCNN_ResNet50_FPN_V2_Weights 
-from torchvision.models.vgg import vgg16, VGG16_Weights
+
+
+class TwoMLPHeadWithDropout(nn.Module):
+    def __init__(self, in_channels, representation_size, dropout_prob):
+        super(TwoMLPHeadWithDropout, self).__init__()
+        self.dropout_prob = dropout_prob
+
+        self.fc6 = nn.Linear(in_channels, representation_size)
+        self.dropout1 = nn.Dropout(self.dropout_prob)
+        self.fc7 = nn.Linear(representation_size, representation_size)
+        self.dropout2 = nn.Dropout(self.dropout_prob)
+
+    def forward(self, x):
+        x = x.flatten(start_dim=1)
+
+        x = F.relu(self.fc6(x))
+        x = self.dropout1(x)
+        x = F.relu(self.fc7(x))
+        x = self.dropout2(x)
+        return x
 
 '''
 Faster R-CNN processes the image:
@@ -36,10 +56,12 @@ class FasterRCNN(L.LightningModule):
         self.learning_rate = learning_rate
         self.momentum = momentum
         self.dropout_prob = 0.25
-        self.model = fasterrcnn_resnet50_fpn(
-            weights=FasterRCNN_ResNet50_FPN_Weights.DEFAULT     
-            )
-        self._add_dropout_to_backbone()
+        self.model = fasterrcnn_resnet50_fpn(weights = FasterRCNN_ResNet50_FPN_Weights.COCO_V1)
+
+        in_channels = self.model.roi_heads.box_head.fc6.in_features
+        representation_size = self.model.roi_heads.box_head.fc6.out_features
+        self.model.roi_heads.box_head = TwoMLPHeadWithDropout(in_channels, representation_size, self.dropout_prob)
+
         in_features = self.model.roi_heads.box_predictor.cls_score.in_features
         self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features, self.num_classes)
         print(f"Model: {self.model}")
@@ -336,81 +358,12 @@ class FasterRCNN(L.LightningModule):
         return predictions
     
 
-    def _add_dropout_to_backbone(self):
-        """
-        Add dropout after each bottleneck block in the ResNet50 backbone.
-        Each bottleneck has the structure:
-        conv1 -> bn1 -> relu -> conv2 -> bn2 -> relu -> conv3 -> bn3 -> add identity -> relu
-        
-        We'll add dropout after each ReLU in the bottleneck blocks to prevent overfitting.
-        """
-        backbone = self.model.backbone.body  # This is the ResNet50 backbone
-        
-        # Custom bottleneck with dropout
-        class BottleneckWithDropout(nn.Module):
-            def __init__(self, original_bottleneck, dropout_prob):
-                super(BottleneckWithDropout, self).__init__()
-                
-                # Copy all attributes from the original bottleneck
-                self.conv1 = original_bottleneck.conv1
-                self.bn1 = original_bottleneck.bn1
-                self.conv2 = original_bottleneck.conv2
-                self.bn2 = original_bottleneck.bn2
-                self.conv3 = original_bottleneck.conv3
-                self.bn3 = original_bottleneck.bn3
-                self.relu = original_bottleneck.relu
-                # self.downsample = original_bottleneck.downsample
-                # self.stride = original_bottleneck.stride
-                # 
-                # Add dropout layer
-                self.dropout = nn.Dropout(p=dropout_prob)
-                
-            def forward(self, x):
-                identity = x
-                
-                # First block with dropout
-                out = self.conv1(x)
-                out = self.bn1(out)
-                out = self.relu(out)
-                out = self.dropout(out)  # Add dropout after first ReLU
-                
-                # Second block with dropout
-                out = self.conv2(out)
-                out = self.bn2(out)
-                out = self.relu(out)
-                out = self.dropout(out)  # Add dropout after second ReLU
-                
-                # Third block
-                out = self.conv3(out)
-                out = self.bn3(out)
-                
-                # if self.downsample is not None:
-                #     identity = self.downsample(x)
-                
-                # Add identity connection
-                # out += identity
-                out = self.relu(out)
-                out = self.dropout(out)  # Add dropout after final ReLU
-                
-                return out
-        
-        # Replace each bottleneck with our custom version
-        for layer_name in ['layer1', 'layer2', 'layer3', 'layer4']:
-            if hasattr(backbone, layer_name):
-                layer = getattr(backbone, layer_name)
-                # for i in range(len(layer)):
-                original_bottleneck = layer[-1]
-                layer[-1] = BottleneckWithDropout(original_bottleneck, self.dropout_prob)
-        
-        print(f"Added dropout ({self.dropout_prob}) after each ReLU in ResNet backbone bottlenecks")
-
-
     def configure_optimizers(self):
         optimizer = torch.optim.SGD(
             params=self.parameters(),
             lr=self.learning_rate,
             momentum=self.momentum,
-            weight_decay=0.0001,
+            # weight_decay=0.0001,
         )
         return optimizer
         # scheduler = torch.optim.lr_scheduler.ExponentialLR(
