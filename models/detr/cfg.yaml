@@ -3,10 +3,10 @@ csv_path: dataset/coco
 data_type: quadrant_enumeration 
 checkpoints_path: checkpoints/
 # Model parameters
-learning_rate: 1e-4
+learning_rate: 1e-3
 weight_decay: 0.05
-batch_size: 2
-max_epochs: 50
+batch_size: 8
+max_epochs: 100
 validation_interval: 5  # Run validation every N epochs
 gradient_clip_val: 0.1  # Helps prevent gradient explosion
 num_classes: 32         # 32 teeth classes + 1 background class

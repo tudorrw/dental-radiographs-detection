@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import pytorch_lightning as pl
 from transformers import DetrForObjectDetection, DeformableDetrForObjectDetection
+from torchvision.ops import box_iou
 
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
 import matplotlib.pyplot as plt
@@ -10,7 +11,7 @@ from sklearn.metrics import confusion_matrix
 import os
  
 class DETR(pl.LightningModule):
-    def __init__(self, num_classes, learning_rate=1e-5, weight_decay=1e-4, use_weighted_loss=True):
+    def __init__(self, num_classes, learning_rate, weight_decay, use_weighted_loss=True):
         super().__init__()
        
         self.save_hyperparameters()
@@ -60,117 +61,90 @@ class DETR(pl.LightningModule):
         )
        
         loss = outputs.loss
-        loss_dict = outputs.loss_dict
-
-        return loss, loss_dict
+        return loss
  
     def training_step(self, batch, batch_idx):
         # Extract from dict format
-        loss, loss_dict = self.common_step(batch, batch_idx)
-        self.log("training_loss", loss)
+        loss = self.common_step(batch, batch_idx)
+        self.log("train_loss", loss)
         # for k,v in loss_dict.items():
         #     self.log(f"train_{k}", v)
         return loss
    
     def validation_step(self, batch, batch_idx):
-        # Extract from dict format
         pixel_values = batch['pixel_values']
         pixel_mask = batch['pixel_mask']
         targets = [{k: v.to(self.device) for k, v in t.items()} for t in batch['labels']]
-        # Forward pass for loss
-        outputs = self.model(
-            pixel_values=pixel_values,
-            pixel_mask=pixel_mask,
-            labels=targets
-        )
-       
-        loss = outputs.loss
-        self.log("val_loss", loss, on_epoch=True, prog_bar=True)
-       
-        # Get predictions for metrics
+
+        # Set model in training mode to get loss
+        self.model.train()
+        outputs = self.forward(pixel_values, pixel_mask, labels=targets)
+        val_loss = outputs.loss
+
+        self.model.eval()
         with torch.no_grad():
-            predictions = self.model(
-                pixel_values=pixel_values
-            )
-       
-        # Format predictions for metrics
-        pred_boxes = predictions.pred_boxes
-        pred_logits = predictions.logits
-       
-        # Process predictions for metrics
+            preds = self.model(pixel_values)
+
+        pred_boxes = preds.pred_boxes
+        pred_logits = preds.logits
+
         metric_preds = []
         metric_targets = []
-        
+
         for i in range(len(targets)):
-           
-            # Get predictions for this image
             probs = torch.softmax(pred_logits[i], dim=-1)
-           
-            # Handle background class
             background_probs = probs[:, 0]
             class_probs, labels = torch.max(probs[:, 1:], dim=-1)
-            labels = labels + 1  # Offset by 1 since we excluded background
-           
-            # Filter out background predictions
-            threshold = 0.7  # Confidence threshold
-            is_foreground = class_probs > threshold
-            boxes = pred_boxes[i][is_foreground]
-            scores = class_probs[is_foreground]
-            pred_labels = labels[is_foreground]
-           
+            labels = labels + 1  # Shift because background is 0
+
+            threshold = 0.5
+            keep = class_probs > threshold
+            boxes = pred_boxes[i][keep]
+            scores = class_probs[keep]
+            pred_labels = labels[keep]
+
             metric_preds.append({
                 "boxes": boxes,
                 "scores": scores,
                 "labels": pred_labels,
             })
-            
-            # Prepare target for this image
-            target = targets[i]
+
             metric_targets.append({
-                "boxes": target["boxes"],
-                "labels": target["class_labels"],
+                "boxes": targets[i]["boxes"],
+                "labels": targets[i]["class_labels"],
             })
-            
-            # Collect labels for confusion matrix (using IoU matching)
-            # Skip if no predictions or no ground truth
-            if len(target["boxes"]) > 0 and len(boxes) > 0:
-                # Convert boxes to xyxy format for IoU calculation
+
+            # For confusion matrix
+            if len(targets[i]["boxes"]) > 0 and len(boxes) > 0:
                 pred_boxes_xyxy = self._xywh_to_xyxy(boxes)
-                gt_boxes_xyxy = self._xywh_to_xyxy(target["boxes"])
-                
-                # Compute IoU between each pred and gt box
-                ious = self._box_iou(pred_boxes_xyxy, gt_boxes_xyxy)
-                
-                # For each ground truth box, find the best matching prediction
-                for gt_idx in range(len(target["class_labels"])):
-                    gt_label = target["class_labels"][gt_idx].item()
+                gt_boxes_xyxy = self._xywh_to_xyxy(targets[i]["boxes"])
+
+                ious = box_iou(pred_boxes_xyxy, gt_boxes_xyxy)
+
+                for gt_idx in range(len(targets[i]["class_labels"])):
+                    gt_label = targets[i]["class_labels"][gt_idx].item()
                     self.val_true_labels.append(gt_label)
-                    
-                    if len(ious) == 0:  # No predictions
-                        self.val_pred_labels.append(0)  # Background
+
+                    if len(ious) == 0:
+                        self.val_pred_labels.append(0)
                         continue
-                    
-                    # Find best prediction match
+
                     best_iou, best_idx = torch.max(ious[:, gt_idx], dim=0)
-                    
-                    # If IoU is high enough, consider it a match
                     if best_iou > 0.5:
                         self.val_pred_labels.append(pred_labels[best_idx].item())
-                        
-                        # Remove this prediction to avoid double matching
-                        mask = torch.ones(ious.size(0), dtype=torch.bool)
+                        mask = torch.ones(ious.shape[0], dtype=torch.bool, device=ious.device)
                         mask[best_idx] = False
                         ious = ious[mask]
                         pred_labels = pred_labels[mask]
                     else:
-                        # No match, count as background prediction
                         self.val_pred_labels.append(0)
- 
-      
-        # Update metrics
+
+        # Update detection metrics
         self.metric.update(preds=metric_preds, target=metric_targets)
-       
-        return loss
+
+        self.log("val_loss", val_loss)
+        return val_loss
+
    
     def on_validation_epoch_start(self):
         # Reset metrics and confusion matrix data
@@ -180,12 +154,12 @@ class DETR(pl.LightningModule):
         
     def on_validation_epoch_end(self):
         # Compute and log detection metrics
-        metrics = self.metric.compute()
+        computed_metrics  = self.metric.compute()
        
         # Log map and map_50
-        self.log("val_map", metrics["map"], on_epoch=True)
-        self.log("val_map_50", metrics["map_50"], on_epoch=True)
-        self.log("val_map_75", metrics["map_75"], on_epoch=True)
+        filtered_metrics = {k: v for k, v in computed_metrics.items() if not k.startswith("mar_") and not k == "classes"}
+        for k, v in filtered_metrics.items():
+            self.log(f"val_{k}", v)
         
         # Compute and log confusion matrix if we have predictions
         if self.val_pred_labels and self.val_true_labels:
@@ -202,26 +176,7 @@ class DETR(pl.LightningModule):
         x2 = x + w / 2
         y2 = y + h / 2
         return torch.stack([x1, y1, x2, y2], dim=1)
-    
-    def _box_iou(self, boxes1, boxes2):
-        """
-        Compute IoU between two sets of boxes.
-        Boxes are in (x1, y1, x2, y2) format.
-        """
-        # Calculate intersection
-        max_xy = torch.min(boxes1[:, None, 2:], boxes2[None, :, 2:])
-        min_xy = torch.max(boxes1[:, None, :2], boxes2[None, :, :2])
-        inter = torch.clamp((max_xy - min_xy), min=0)
-        inter = inter[:, :, 0] * inter[:, :, 1]
-        
-        # Calculate union
-        area1 = (boxes1[:, 2] - boxes1[:, 0]) * (boxes1[:, 3] - boxes1[:, 1])
-        area2 = (boxes2[:, 2] - boxes2[:, 0]) * (boxes2[:, 3] - boxes2[:, 1])
-        union = area1[:, None] + area2[None, :] - inter
-        
-        # Calculate IoU
-        iou = inter / union
-        return iou
+
     
     def compute_confusion_matrix(self):
         """Compute and visualize confusion matrix from collected predictions and targets."""
@@ -294,16 +249,17 @@ class DETR(pl.LightningModule):
     def configure_optimizers(self):
 
         # Create optimizer with different learning rates
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        optimizer = torch.optim.SGD(self.parameters(), lr=self.learning_rate)
        
-        # Learning rate scheduler
-        lr_scheduler = {
-            "scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(
-                optimizer,
-                T_max=10,
-                eta_min=1e-6,
-            ),
-        }
+        return optimizer
+        # # Learning rate scheduler
+        # lr_scheduler = {
+        #     "scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(
+        #         optimizer,
+        #         T_max=10,
+        #         eta_min=1e-6,
+        #     ),
+        # }
        
-        return {"optimizer": optimizer, "lr_scheduler": lr_scheduler}
+        # return {"optimizer": optimizer, "lr_scheduler": lr_scheduler}
  

@@ -64,11 +64,6 @@ class CocoDetectionTeeth(torchvision.datasets.CocoDetection):
                 target["bbox"] = bboxes[i]
                 target["category_id"] = category_ids[i]
             image = Image.fromarray(image)
-
-            # print("image id after", image_id)
-            # print("image after", image)
-            # print("bboxes after", bboxes)
-            # print("category_ids after", category_ids)
         # Format for DETR processor
         annotations = {"image_id": image_id, "annotations": targets}
         
@@ -83,10 +78,10 @@ class CocoDetectionTeeth(torchvision.datasets.CocoDetection):
     
     def get_augmentations(self): 
         return A.Compose([
-            # A.NoOp()
-            A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.05, rotate_limit=5, p=0.25),
-            A.RandomGamma(gamma_limit=(80, 120), p=0.25),
-            A.CLAHE(clip_limit=2.0, tile_grid_size=(16,16), p=0.4),
+            A.NoOp()
+            # A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.05, rotate_limit=5, p=0.25),
+            # A.RandomGamma(gamma_limit=(80, 120), p=0.25),
+            # A.CLAHE(clip_limit=2.0, tile_grid_size=(16,16), p=0.4),
         ],
         bbox_params=A.BboxParams(format='coco',label_fields=["category_ids"], clip=True)
         )
