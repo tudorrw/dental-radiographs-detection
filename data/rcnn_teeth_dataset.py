@@ -54,17 +54,17 @@ class TeethDataset(Dataset):
     def get_augmentations(self):
         """Transformations for training."""
         return A.Compose([
-            A.NoOp()
-            # A.RandomBrightnessContrast(p=.5),
-            # A.ShiftScaleRotate(p=.5,
-            #                 shift_limit=0.05,
-            #                 rotate_limit=10),
+            # A.NoOp()
+            A.RandomBrightnessContrast(p=.5),
+            A.ShiftScaleRotate(p=.5,
+                            shift_limit=0.05,
+                            rotate_limit=10),
             # A.CoarseDropout(num_holes_range=(5,5),
             #         hole_height_range=(70,80),
             #         hole_width_range=(70,80),
             #         fill=128,
             #         p=.5),
-            # A.CLAHE(clip_limit=2.0, tile_grid_size=(16,16), p=0.3),
+            A.CLAHE(clip_limit=2.0, tile_grid_size=(16,16), p=0.3),
         ], bbox_params=A.BboxParams(format="pascal_voc", label_fields=["category_ids"]))
 
 

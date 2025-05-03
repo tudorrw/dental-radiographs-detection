@@ -29,14 +29,15 @@ if __name__ == "__main__":
     test_dataset = TeethDataset(
         image_dir=f"{config['image_dir']}/{config['data_type']}/xrays", 
         csv_path=f"{config['csv_path']}/{config['data_type']}/quadrant_enumeration_voc_test.csv",
+        # csv_path=f"{config['csv_path']}/{config['data_type']}/quadrant_enumeration_voc_test_folds.csv",
         dataset_type="test"
     )
 
     test_loader = DataLoader(test_dataset, batch_size=config["batch_size"], num_workers=0, pin_memory=True, collate_fn=TeethDataset.collate_fn)
 
-    checkpoint = os.path.join(config["checkpoints_path"], "faster_rcnn", "version_1", "epoch=27-val_loss=0.85.ckpt")
-    # checkpoint = os.path.join(config["checkpoints_path"], "faster_rcnn", "version_4", "epoch=17-val_loss=0.91.ckpt")
-    # checkpoint = os.path.join(config["checkpoints_path"], "faster_rcnn", "version_3", "epoch=24-val_loss=0.92.ckpt")
+    checkpoint = os.path.join(config["checkpoints_path"], "faster_rcnn", "version_0", "epoch=21-val_loss=0.82.ckpt")
+    # checkpoint = os.path.join(config["checkpoints_path"], "faster_rcnn", "version_1", "epoch=77-val_loss=0.88.ckpt")
+    # checkpoint = os.path.join(config["checkpoints_path"], "faster_rcnn", "k_fold", "fold_1" ,"epoch=29-val_loss=0.7546.ckpt")
     model = FasterRCNN.load_from_checkpoint(checkpoint)
 
     trainer = pl.Trainer(

@@ -51,7 +51,9 @@ class CocoDetectionTeeth(torchvision.datasets.CocoDetection):
 
         # Process the targets for DETR
         bboxes, category_ids = self.encode_targets(targets)
-    
+        # print("Bboxes before", bboxes)
+        # print("Category IDs before", category_ids)
+
         if self.transform:
             image = np.array(image.convert("RGB"))
             augmented = self.transform(image=image, bboxes=bboxes, category_ids=category_ids)
@@ -64,6 +66,11 @@ class CocoDetectionTeeth(torchvision.datasets.CocoDetection):
                 target["bbox"] = bboxes[i]
                 target["category_id"] = category_ids[i]
             image = Image.fromarray(image)
+
+            # print("image id after", image_id)
+            # print("image after", image)
+            # print("bboxes after", bboxes)
+            # print("category_ids after", category_ids)
         # Format for DETR processor
         annotations = {"image_id": image_id, "annotations": targets}
         
@@ -73,7 +80,7 @@ class CocoDetectionTeeth(torchvision.datasets.CocoDetection):
         # Extract values needed for model training
         pixel_values = encoding["pixel_values"].squeeze()
         labels = encoding["labels"][0]
-
+        
         return pixel_values, labels
     
     def get_augmentations(self): 
@@ -105,5 +112,4 @@ class CocoDetectionTeeth(torchvision.datasets.CocoDetection):
             'labels': labels
         }
     
-
 

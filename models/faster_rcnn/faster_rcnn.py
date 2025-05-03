@@ -55,7 +55,7 @@ class FasterRCNN(L.LightningModule):
         self.num_classes = num_classes
         self.learning_rate = learning_rate
         self.momentum = momentum
-        self.dropout_prob = 0.25
+        self.dropout_prob = 0.2
         self.model = fasterrcnn_resnet50_fpn(weights = FasterRCNN_ResNet50_FPN_Weights.COCO_V1)
 
         in_channels = self.model.roi_heads.box_head.fc6.in_features
