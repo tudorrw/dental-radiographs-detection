@@ -34,6 +34,16 @@ tensorboard --logdir=checkpoints/retinanet
 # to vizualize the results of the yolo, faster_rcnn models, run the following command:
 python -m models.visualize_results
 
+
+# commands for dino
+python -m models.dino.train.py \
+	--options dn_scalar=100 embed_init_tgt=TRUE \
+	dn_label_coef=1.0 dn_bbox_coef=1.0 use_ema=False \
+	dn_box_noise_scale=1.0 \
+    --finetune_ignore label_enc.weight class_embed
+
+
+
 python -m models.meta_model
 #utils
 # run frontend

@@ -8,11 +8,11 @@ import os
 import sys
 from typing import Iterable
 
-from util.utils import slprint, to_device
+from utils.utils import slprint, to_device
 
 import torch
 
-import util.misc as utils
+import utils.misc as utils
 from .datasets.coco_eval import CocoEvaluator
 from .datasets.panoptic_eval import PanopticEvaluator
 
