@@ -5,3 +5,7 @@ tb_logs
 visualizations/
 results/
 **/__pycache__
+models/dino/ops/MultiScaleDeformableAttention*
+models/dino/ops/build*
+
+
