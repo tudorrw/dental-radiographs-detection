@@ -38,7 +38,7 @@ from .segmentation import DETRsegm, PostProcessPanoptic, PostProcessSegm, dice_l
 from .deformable_transformer import build_deformable_transformer
 from .utils import sigmoid_focal_loss, MLP
 
-from ..registry import MODULE_BUILD_FUNCS
+from models.dino.registry import MODULE_BUILD_FUNCS
 from .dn_components import prepare_for_cdn, dn_post_process
 
 

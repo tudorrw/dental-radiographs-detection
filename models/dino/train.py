@@ -25,7 +25,7 @@ from models.dino.engine import evaluate, train_one_epoch, test
 
 def get_args_parser():
     parser = argparse.ArgumentParser("Set transformer detector", add_help=False)
-    parser.add_argument("--config_file", "-c", type=str, required=True, default="models/dino/configs/DINO_4scale_cls32.py")
+    parser.add_argument("--config_file", "-c", type=str, default="models/dino/configs/DINO_4scale_cls32.py")
     parser.add_argument(
         "--options",
         nargs="+",
@@ -36,13 +36,13 @@ def get_args_parser():
 
     # dataset parameters
     parser.add_argument("--dataset_file", default="coco")
-    parser.add_argument("--coco_path", type=str, default="dataset/coco/dino")
+    parser.add_argument("--coco_path", type=str, default="dataset/coco/dino/quadrant_enumeration")
     parser.add_argument("--coco_panoptic_path", type=str)
     parser.add_argument("--remove_difficult", action="store_true")
     parser.add_argument("--fix_size", action="store_true")
 
     # training parameters
-    parser.add_argument("--output_dir", default="output_dino_res50_enum32", help="")
+    parser.add_argument("--output_dir", default="checkpoints/dino/version_2", help="")
     parser.add_argument("--note", default="", help="add some notes to the experiment")
     parser.add_argument("--device", default="cuda", help="device to use for training / testing")
     parser.add_argument("--seed", default=42, type=int)
@@ -71,7 +71,7 @@ def get_args_parser():
 
 def build_model_main(args):
     # we use register to maintain models from catdet6 on.
-    from models.registry import MODULE_BUILD_FUNCS
+    from models.dino.registry import MODULE_BUILD_FUNCS
 
     assert args.modelname in MODULE_BUILD_FUNCS._module_dict
     build_func = MODULE_BUILD_FUNCS.get(args.modelname)
@@ -224,7 +224,8 @@ def main(args):
             args.start_epoch = checkpoint["epoch"] + 1
 
     if (not args.resume) and args.pretrain_model_path:
-        checkpoint = torch.load(args.pretrain_model_path, map_location="cpu")["model"]
+        with torch.serialization.safe_globals([argparse.Namespace]):
+            checkpoint = torch.load(args.pretrain_model_path, map_location="cpu")
         from collections import OrderedDict
 
         _ignorekeywordlist = args.finetune_ignore if args.finetune_ignore else []
