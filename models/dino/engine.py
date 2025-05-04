@@ -15,6 +15,11 @@ import torch
 import utils.misc as utils
 from .datasets.coco_eval import CocoEvaluator
 from .datasets.panoptic_eval import PanopticEvaluator
+import numpy as np
+from sklearn.metrics import confusion_matrix
+import matplotlib.pyplot as plt
+from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 
 
 def train_one_epoch(
@@ -44,11 +49,16 @@ def train_one_epoch(
     metric_logger.add_meter("lr", utils.SmoothedValue(window_size=1, fmt="{value:.6f}"))
     if not wo_class_error:
         metric_logger.add_meter("class_error", utils.SmoothedValue(window_size=1, fmt="{value:.2f}"))
-    header = "Epoch: [{}]".format(epoch)
+    header = f"Epoch {epoch+1}"
     print_freq = 10
 
     _cnt = 0
-    for samples, targets in metric_logger.log_every(data_loader, print_freq, header, logger=logger):
+    # Use tqdm for a clean progress bar
+    is_main = utils.is_main_process()
+    data_iter = data_loader
+    if is_main:
+        data_iter = tqdm(data_loader, desc=header, leave=True, ncols=100)
+    for samples, targets in data_iter:
         samples = samples.to(device)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
@@ -104,6 +114,10 @@ def train_one_epoch(
             metric_logger.update(class_error=loss_dict_reduced["class_error"])
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
 
+        # Update tqdm bar with current loss
+        if is_main:
+            data_iter.set_postfix({'loss': f'{loss_value:.4f}'})
+
         _cnt += 1
         if args.debug:
             if _cnt % 15 == 0:
@@ -117,7 +131,8 @@ def train_one_epoch(
 
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
-    print("Averaged stats:", metric_logger)
+    if is_main:
+        print("Averaged stats:", metric_logger)
     resstat = {k: meter.global_avg for k, meter in metric_logger.meters.items() if meter.count > 0}
     if getattr(criterion, "loss_weight_decay", False):
         resstat.update({f"weight_{k}": v for k, v in criterion.weight_dict.items()})
@@ -136,6 +151,7 @@ def evaluate(
     wo_class_error=False,
     args=None,
     logger=None,
+    epoch=None,
 ):
     try:
         need_tgt_for_training = args.use_dn
@@ -159,7 +175,6 @@ def evaluate(
     if not useCats:
         print("useCats: {} !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!".format(useCats))
     coco_evaluator = CocoEvaluator(base_ds, iou_types, useCats=useCats)
-    # coco_evaluator.coco_eval[iou_types[0]].params.iouThrs = [0, 0.1, 0.5, 0.75]
 
     panoptic_evaluator = None
     if "panoptic" in postprocessors.keys():
@@ -171,10 +186,16 @@ def evaluate(
 
     _cnt = 0
     output_state_dict = {}  # for debug only
-    for samples, targets in metric_logger.log_every(data_loader, 10, header, logger=logger):
+    # For confusion matrix
+    all_gt_labels = []
+    all_pred_labels = []
+    # Use tqdm for a clean progress bar
+    is_main = utils.is_main_process()
+    data_iter = data_loader
+    if is_main:
+        data_iter = tqdm(data_loader, desc=header, leave=True, ncols=100)
+    for samples, targets in data_iter:
         samples = samples.to(device)
-
-        # targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
         targets = [{k: to_device(v, device) for k, v in t.items()} for t in targets]
 
         with torch.cuda.amp.autocast(enabled=args.amp):
@@ -182,8 +203,6 @@ def evaluate(
                 outputs = model(samples, targets)
             else:
                 outputs = model(samples)
-            # outputs = model(samples)
-
             loss_dict = criterion(outputs, targets)
         weight_dict = criterion.weight_dict
 
@@ -197,6 +216,11 @@ def evaluate(
         if "class_error" in loss_dict_reduced:
             metric_logger.update(class_error=loss_dict_reduced["class_error"])
 
+        # Update tqdm bar with current loss
+        if is_main:
+            loss_value = sum(loss_dict_reduced_scaled.values()).item() if loss_dict_reduced_scaled else 0.0
+            data_iter.set_postfix({'loss': f'{loss_value:.4f}'})
+
         orig_target_sizes = torch.stack([t["orig_size"] for t in targets], dim=0)
         results = postprocessors["bbox"](outputs, orig_target_sizes)
         # [scores: [100], labels: [100], boxes: [100, 4]] x B
@@ -204,6 +228,16 @@ def evaluate(
             target_sizes = torch.stack([t["size"] for t in targets], dim=0)
             results = postprocessors["segm"](results, outputs, orig_target_sizes, target_sizes)
         res = {target["image_id"].item(): output for target, output in zip(targets, results)}
+
+        # Collect ground truth and predicted labels for confusion matrix
+        for target, output in zip(targets, results):
+            gt_labels = target["labels"].cpu().numpy()
+            pred_labels = output["labels"].cpu().numpy() if hasattr(output["labels"], 'cpu') else np.array(output["labels"])
+            N = len(gt_labels)
+            if N == 0:
+                continue
+            all_gt_labels.extend(gt_labels)
+            all_pred_labels.extend(pred_labels[:N])
 
         if coco_evaluator is not None:
             coco_evaluator.update(res)
@@ -219,49 +253,20 @@ def evaluate(
             panoptic_evaluator.update(res_pano)
 
         if args.save_results:
-            # res_score = outputs['res_score']
-            # res_label = outputs['res_label']
-            # res_bbox = outputs['res_bbox']
-            # res_idx = outputs['res_idx']
-
             for i, (tgt, res, outbbox) in enumerate(zip(targets, results, outputs["pred_boxes"])):
-                """
-                pred vars:
-                    K: number of bbox pred
-                    score: Tensor(K),
-                    label: list(len: K),
-                    bbox: Tensor(K, 4)
-                    idx: list(len: K)
-                tgt: dict.
-
-                """
-                # compare gt and res (after postprocess)
                 gt_bbox = tgt["boxes"]
                 gt_label = tgt["labels"]
                 gt_info = torch.cat((gt_bbox, gt_label.unsqueeze(-1)), 1)
-
-                # img_h, img_w = tgt['orig_size'].unbind()
-                # scale_fct = torch.stack([img_w, img_h, img_w, img_h], dim=0)
-                # _res_bbox = res['boxes'] / scale_fct
                 _res_bbox = outbbox
                 _res_prob = res["scores"]
                 _res_label = res["labels"]
                 res_info = torch.cat((_res_bbox, _res_prob.unsqueeze(-1), _res_label.unsqueeze(-1)), 1)
-                # import ipdb;ipdb.set_trace()
-
                 if "gt_info" not in output_state_dict:
                     output_state_dict["gt_info"] = []
                 output_state_dict["gt_info"].append(gt_info.cpu())
-
                 if "res_info" not in output_state_dict:
                     output_state_dict["res_info"] = []
                 output_state_dict["res_info"].append(res_info.cpu())
-
-            # # for debug only
-            # import random
-            # if random.random() > 0.7:
-            #     print("Now let's break")
-            #     break
 
         _cnt += 1
         if args.debug:
@@ -271,16 +276,14 @@ def evaluate(
 
     if args.save_results:
         import os.path as osp
-
-        # output_state_dict['gt_info'] = torch.cat(output_state_dict['gt_info'])
-        # output_state_dict['res_info'] = torch.cat(output_state_dict['res_info'])
         savepath = osp.join(args.output_dir, "results-{}.pkl".format(utils.get_rank()))
         print("Saving res to {}".format(savepath))
         torch.save(output_state_dict, savepath)
 
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
-    print("Averaged stats:", metric_logger)
+    if is_main:
+        print("Averaged stats:", metric_logger)
     if coco_evaluator is not None:
         coco_evaluator.synchronize_between_processes()
     if panoptic_evaluator is not None:
@@ -304,6 +307,31 @@ def evaluate(
         stats["PQ_all"] = panoptic_res["All"]
         stats["PQ_th"] = panoptic_res["Things"]
         stats["PQ_st"] = panoptic_res["Stuff"]
+
+    # Compute and save confusion matrix
+    if len(all_gt_labels) > 0 and len(all_pred_labels) > 0:
+        num_classes = max(max(all_gt_labels), max(all_pred_labels)) + 1
+        print(f"num_classes: {num_classes}")
+        cm = confusion_matrix(all_gt_labels, all_pred_labels, labels=np.arange(num_classes))
+        stats["confusion_matrix"] = cm.tolist()
+        if is_main:
+            fig, ax = plt.subplots(figsize=(10, 10))
+            im = ax.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
+            ax.figure.colorbar(im, ax=ax)
+            ax.set(
+                xticks=np.arange(num_classes),
+                yticks=np.arange(num_classes),
+                xlabel='Predicted label',
+                ylabel='True label',
+                title='Confusion Matrix'
+            )
+            plt.tight_layout()
+            # Save with epoch number if available
+            if epoch is not None:
+                plt.savefig(os.path.join(output_dir, f"confusion_matrix_epoch_{epoch}.png"))
+            else:
+                plt.savefig(os.path.join(output_dir, "confusion_matrix.png"))
+            plt.close(fig)
 
     return stats, coco_evaluator
 

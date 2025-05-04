@@ -11,6 +11,7 @@ import numpy as np
 
 import torch
 from torch.utils.data import DataLoader, DistributedSampler
+from torch.utils.tensorboard import SummaryWriter
 
 from utils.get_param_dicts import get_param_dict
 from utils.logger import setup_logger
@@ -42,7 +43,7 @@ def get_args_parser():
     parser.add_argument("--fix_size", action="store_true")
 
     # training parameters
-    parser.add_argument("--output_dir", default="checkpoints/dino/version_2", help="")
+    parser.add_argument("--output_dir", default="checkpoints/dino/version_0", help="")
     parser.add_argument("--note", default="", help="add some notes to the experiment")
     parser.add_argument("--device", default="cuda", help="device to use for training / testing")
     parser.add_argument("--seed", default=42, type=int)
@@ -265,6 +266,8 @@ def main(args):
             args.output_dir,
             wo_class_error=wo_class_error,
             args=args,
+            logger=(logger if args.save_log else None),
+            epoch=epoch,
         )
         if args.output_dir:
             utils.save_on_master(coco_evaluator.coco_eval["bbox"].eval, output_dir / "eval.pth")
@@ -276,13 +279,21 @@ def main(args):
 
         return
 
+    # Setup TensorBoard
+    if args.rank == 0:  # Only log on main process
+        writer = SummaryWriter(log_dir=os.path.join(args.output_dir, 'tensorboard'))
+    
     print("Start training")
     start_time = time.time()
     best_map_holder = BestMetricHolder(use_ema=args.use_ema)
+    checkpoint_scores = []
+
     for epoch in range(args.start_epoch, args.epochs):
         epoch_start_time = time.time()
         if args.distributed:
             sampler_train.set_epoch(epoch)
+        
+        # Training
         train_stats = train_one_epoch(
             model,
             criterion,
@@ -297,6 +308,84 @@ def main(args):
             logger=(logger if args.save_log else None),
             ema_m=ema_m,
         )
+
+        # Log training metrics
+        if args.rank == 0:
+            for k, v in train_stats.items():
+                if isinstance(v, (float, int)):
+                    writer.add_scalar(f'train/{k}', v, epoch)
+            writer.add_scalar('train/learning_rate', optimizer.param_groups[0]['lr'], epoch)
+
+        # Evaluation
+        test_stats, coco_evaluator = evaluate(
+            model,
+            criterion,
+            postprocessors,
+            data_loader_val,
+            base_ds,
+            device,
+            args.output_dir,
+            wo_class_error=wo_class_error,
+            args=args,
+            logger=(logger if args.save_log else None),
+            epoch=epoch,
+        )
+
+        # Log validation metrics
+        if args.rank == 0:
+            # Log mAP metrics
+            writer.add_scalar('val/mAP', test_stats["coco_eval_bbox"][0], epoch)
+            writer.add_scalar('val/mAP50', test_stats["coco_eval_bbox"][1], epoch)
+            writer.add_scalar('val/mAP75', test_stats["coco_eval_bbox"][2], epoch)
+            
+            # Log precision and recall
+            if "precision" in test_stats:
+                writer.add_scalar('val/precision', test_stats["precision"], epoch)
+            if "recall" in test_stats:
+                writer.add_scalar('val/recall', test_stats["recall"], epoch)
+            if "f1" in test_stats:
+                writer.add_scalar('val/f1', test_stats["f1"], epoch)
+
+        map_regular = test_stats["coco_eval_bbox"][0]
+        _isbest = best_map_holder.update(map_regular, epoch, is_ema=False)
+
+        # Always define log_stats before EMA evaluation
+        log_stats = {
+            **{f"train_{k}": v for k, v in train_stats.items()},
+            **{f"test_{k}": v for k, v in test_stats.items()},
+        }
+
+        # EMA evaluation
+        if args.use_ema:
+            ema_test_stats, ema_coco_evaluator = evaluate(
+                ema_m.module,
+                criterion,
+                postprocessors,
+                data_loader_val,
+                base_ds,
+                device,
+                args.output_dir,
+                wo_class_error=wo_class_error,
+                args=args,
+                logger=(logger if args.save_log else None),
+                epoch=epoch,
+            )
+            # Log EMA metrics
+            if args.rank == 0:
+                writer.add_scalar('val/ema_mAP', ema_test_stats["coco_eval_bbox"][0], epoch)
+                writer.add_scalar('val/ema_mAP50', ema_test_stats["coco_eval_bbox"][1], epoch)
+                writer.add_scalar('val/ema_mAP75', ema_test_stats["coco_eval_bbox"][2], epoch)
+                if "precision" in ema_test_stats:
+                    writer.add_scalar('val/ema_precision', ema_test_stats["precision"], epoch)
+                if "recall" in ema_test_stats:
+                    writer.add_scalar('val/ema_recall', ema_test_stats["recall"], epoch)
+                if "f1" in ema_test_stats:
+                    writer.add_scalar('val/ema_f1', ema_test_stats["f1"], epoch)
+
+            log_stats.update({f"ema_test_{k}": v for k, v in ema_test_stats.items()})
+            map_ema = ema_test_stats["coco_eval_bbox"][0]
+            _isbest = best_map_holder.update(map_ema, epoch, is_ema=True)
+
         if args.output_dir:
             checkpoint_paths = [output_dir / "checkpoint.pth"]
 
@@ -323,67 +412,6 @@ def main(args):
                     )
                 utils.save_on_master(weights, checkpoint_path)
 
-        # eval
-        test_stats, coco_evaluator = evaluate(
-            model,
-            criterion,
-            postprocessors,
-            data_loader_val,
-            base_ds,
-            device,
-            args.output_dir,
-            wo_class_error=wo_class_error,
-            args=args,
-            logger=(logger if args.save_log else None),
-        )
-        map_regular = test_stats["coco_eval_bbox"][0]
-        _isbest = best_map_holder.update(map_regular, epoch, is_ema=False)
-        if _isbest:
-            checkpoint_path = output_dir / "checkpoint_best_regular.pth"
-            utils.save_on_master(
-                {
-                    "model": model_without_ddp.state_dict(),
-                    "optimizer": optimizer.state_dict(),
-                    "lr_scheduler": lr_scheduler.state_dict(),
-                    "epoch": epoch,
-                    "args": args,
-                },
-                checkpoint_path,
-            )
-        log_stats = {
-            **{f"train_{k}": v for k, v in train_stats.items()},
-            **{f"test_{k}": v for k, v in test_stats.items()},
-        }
-
-        # eval ema
-        if args.use_ema:
-            ema_test_stats, ema_coco_evaluator = evaluate(
-                ema_m.module,
-                criterion,
-                postprocessors,
-                data_loader_val,
-                base_ds,
-                device,
-                args.output_dir,
-                wo_class_error=wo_class_error,
-                args=args,
-                logger=(logger if args.save_log else None),
-            )
-            log_stats.update({f"ema_test_{k}": v for k, v in ema_test_stats.items()})
-            map_ema = ema_test_stats["coco_eval_bbox"][0]
-            _isbest = best_map_holder.update(map_ema, epoch, is_ema=True)
-            if _isbest:
-                checkpoint_path = output_dir / "checkpoint_best_ema.pth"
-                utils.save_on_master(
-                    {
-                        "model": ema_m.module.state_dict(),
-                        "optimizer": optimizer.state_dict(),
-                        "lr_scheduler": lr_scheduler.state_dict(),
-                        "epoch": epoch,
-                        "args": args,
-                    },
-                    checkpoint_path,
-                )
         log_stats.update(best_map_holder.summary())
 
         ep_paras = {"epoch": epoch, "n_parameters": n_parameters}
@@ -410,6 +438,16 @@ def main(args):
                         filenames.append(f"{epoch:03}.pth")
                     for name in filenames:
                         torch.save(coco_evaluator.coco_eval["bbox"].eval, output_dir / "eval" / name)
+
+        # Log epoch time
+        if args.rank == 0:
+            epoch_time = time.time() - epoch_start_time
+            writer.add_scalar('time/epoch_time', epoch_time, epoch)
+
+    # Close TensorBoard writer
+    if args.rank == 0:
+        writer.close()
+
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
     print("Training time {}".format(total_time_str))
