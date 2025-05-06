@@ -1,5 +1,5 @@
-path: C:/Users/Tudor/licenta/dental-radiographs-detection/dataset/yolo/classic  # Absolute path to dataset
- 
+path: /workspace/dental-radiographs-detection/dataset/yolo/classic  # Absolute path to dataset
+  
 # Dataset splits
 train: train/images
 val: val/images

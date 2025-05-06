@@ -5,7 +5,7 @@ tb_logs
 visualizations/
 results/
 **/__pycache__
-models/dino/ops/MultiScaleDeformableAttention*
+**/MultiScaleDeformableAttention*
 models/dino/ops/build*
 output_dino_res50_enum32
 

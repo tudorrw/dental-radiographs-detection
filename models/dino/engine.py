@@ -20,6 +20,8 @@ from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
+from torchvision.ops import box_iou
+import seaborn as sns
 
 
 def train_one_epoch(
@@ -231,13 +233,54 @@ def evaluate(
 
         # Collect ground truth and predicted labels for confusion matrix
         for target, output in zip(targets, results):
-            gt_labels = target["labels"].cpu().numpy()
-            pred_labels = output["labels"].cpu().numpy() if hasattr(output["labels"], 'cpu') else np.array(output["labels"])
-            N = len(gt_labels)
-            if N == 0:
+            # Get predictions and targets
+            pred_boxes = output["boxes"]
+            pred_scores = output["scores"]
+            pred_labels = output["labels"]
+            
+            true_boxes = target["boxes"]
+            true_labels = target["labels"]
+            
+            # Skip if no ground truth or predictions
+            if len(true_boxes) == 0 or len(pred_boxes) == 0:
                 continue
-            all_gt_labels.extend(gt_labels)
-            all_pred_labels.extend(pred_labels[:N])
+                
+            # Filter predictions by score threshold
+            score_threshold = 0.5
+            keep_indices = torch.where(pred_scores > score_threshold)[0]
+            if len(keep_indices) == 0:
+                continue
+                
+            pred_boxes = pred_boxes[keep_indices]
+            pred_labels = pred_labels[keep_indices]
+            
+            # Calculate IoU between all pred and gt boxes
+            ious = box_iou(pred_boxes, true_boxes)
+            
+            # For each ground truth, find best matching prediction
+            for gt_idx in range(len(true_labels)):
+                gt_label = true_labels[gt_idx].item()
+                all_gt_labels.append(gt_label)
+                
+                if len(ious) == 0:  # No predictions for this image
+                    all_pred_labels.append(0)  # Background
+                    continue
+                
+                # Find best prediction match
+                best_iou, best_idx = torch.max(ious[:, gt_idx], dim=0)
+                
+                # If IoU is high enough, consider it a match
+                if best_iou > 0.5:
+                    all_pred_labels.append(pred_labels[best_idx].item())
+                    
+                    # Remove this prediction to avoid double matching
+                    mask = torch.ones(ious.shape[0], dtype=torch.bool, device=ious.device)
+                    mask[best_idx] = False
+                    ious = ious[mask]
+                    pred_labels = pred_labels[mask]
+                else:
+                    # No match with high enough IoU
+                    all_pred_labels.append(0)  # Consider as background
 
         if coco_evaluator is not None:
             coco_evaluator.update(res)
@@ -310,28 +353,42 @@ def evaluate(
 
     # Compute and save confusion matrix
     if len(all_gt_labels) > 0 and len(all_pred_labels) > 0:
-        num_classes = max(max(all_gt_labels), max(all_pred_labels)) + 1
-        print(f"num_classes: {num_classes}")
-        cm = confusion_matrix(all_gt_labels, all_pred_labels, labels=np.arange(num_classes))
-        stats["confusion_matrix"] = cm.tolist()
-        if is_main:
-            fig, ax = plt.subplots(figsize=(10, 10))
-            im = ax.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
-            ax.figure.colorbar(im, ax=ax)
-            ax.set(
-                xticks=np.arange(num_classes),
-                yticks=np.arange(num_classes),
-                xlabel='Predicted label',
-                ylabel='True label',
-                title='Confusion Matrix'
-            )
-            plt.tight_layout()
-            # Save with epoch number if available
-            if epoch is not None:
-                plt.savefig(os.path.join(output_dir, f"confusion_matrix_epoch_{epoch}.png"))
-            else:
-                plt.savefig(os.path.join(output_dir, "confusion_matrix.png"))
-            plt.close(fig)
+        # Convert lists to numpy arrays
+        y_true = np.array(all_gt_labels)
+        y_pred = np.array(all_pred_labels)
+        
+        # Get unique classes
+        classes = sorted(np.unique(np.concatenate([y_true, y_pred])))
+        
+        # Compute confusion matrix
+        cm = confusion_matrix(y_true, y_pred, labels=classes)
+        
+        # Plot confusion matrix
+        plt.figure(figsize=(16, 14))
+        
+        # Normalize confusion matrix for better visualization
+        row_sums = cm.sum(axis=1)[:, np.newaxis]
+        cm_norm = np.divide(cm.astype('float'), row_sums, out=np.zeros_like(cm, dtype=float), where=row_sums != 0)
+        cm_norm = np.nan_to_num(cm_norm)  # Replace NaN with 0
+        
+        # Create heatmap
+        sns.heatmap(
+            cm_norm,
+            annot=True,
+            cmap="Blues",
+            fmt='.2f',
+            square=True,
+            xticklabels=[f"Class {i}" for i in classes],
+            yticklabels=[f"Class {i}" for i in classes]
+        )
+        
+        plt.xlabel('Predicted Label')
+        plt.ylabel('True Label')
+        plt.title('Normalized Confusion Matrix')
+        
+        # Save figure
+        plt.savefig(os.path.join(output_dir, f"confusion_matrix_epoch_{epoch}.png"))
+        plt.close()
 
     return stats, coco_evaluator
 

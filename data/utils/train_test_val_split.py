@@ -116,8 +116,8 @@ def process_dino_data(dataset, image_ids):
                 # Calculate tooth ID (same as in YOLO process)
                 tooth_id = category_id_1 * 10 + category_id_2 + 1
                 # Use the tooth label mapper to get a consistent mapping
-                mapped_class_id = int(label_mapper.encode([tooth_id])[0])
-                ann["category_id"] = mapped_class_id
+                # mapped_class_id = int(label_mapper.encode([tooth_id])[0])
+                ann["category_id"] = category_id_1 * 8 + category_id_2
             
             annotations.append(ann)
     

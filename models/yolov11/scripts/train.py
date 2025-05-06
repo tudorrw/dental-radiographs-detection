@@ -12,7 +12,7 @@ def train_yolo_model():
     # model.add_callback("on_pretrain_routine_end", callback_custom_albumentations)    # Train model
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
-    model.train(data=CFG_PATH, epochs=50, imgsz=640, batch=2, device=0, verbose=True, perspective=0.001)  # train
+    model.train(data=CFG_PATH, epochs=100, imgsz=640, batch=8, device=0, verbose=True, perspective=0.001, project=SAVE_PATH, patience=20, auto_augment=False)  # train
 
 if __name__ == "__main__":
     train_yolo_model()

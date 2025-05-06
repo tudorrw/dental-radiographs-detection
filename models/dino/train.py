@@ -210,7 +210,8 @@ def main(args):
         if args.resume.startswith("https"):
             checkpoint = torch.hub.load_state_dict_from_url(args.resume, map_location="cpu", check_hash=True)
         else:
-            checkpoint = torch.load(args.resume, map_location="cpu")
+            with torch.serialization.safe_globals([argparse.Namespace]):
+                checkpoint = torch.load(args.resume, map_location="cpu")
         model_without_ddp.load_state_dict(checkpoint["model"])
         if args.use_ema:
             if "ema_model" in checkpoint:
