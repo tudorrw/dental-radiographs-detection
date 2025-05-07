@@ -9,7 +9,7 @@ from torchmetrics.detection.mean_ap import MeanAveragePrecision
 from tqdm import tqdm
 # Make sure these imports point to the right modules
 from utils.wbf import weighted_boxes_fusion
-from utils.get_models import FineTunedModels
+from api.get_models import FineTunedModels
 from torch.utils.data import DataLoader
 from data.rcnn_teeth_dataset import TeethDataset
 from utils.nms import UniqueClassNMSProcessor, CombinedNMS  # If you're using class-wise NMS

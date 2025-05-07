@@ -20,8 +20,7 @@ class FineTunedModels:
             config = yaml.safe_load(f)
 
         # 2) Load model checkpoint
-        checkpoint_dict = dict(version="version_1", filename="epoch=44-val_loss=0.91.ckpt")
-        # checkpoint_dict = dict(version="version_2", filename="epoch=27-val_loss=0.85.ckpt")
+        checkpoint_dict = dict(version="version_0", filename="epoch=27-val_loss=0.79.ckpt")
         checkpoint = os.path.join(
             config["checkpoints_path"],
             "faster_rcnn",
@@ -34,7 +33,7 @@ class FineTunedModels:
         return model
     
     def get_yolo_model(self):
-        checkpoint = os.path.join("runs", "detect", "train", "weights", "best.pt")
+        checkpoint = os.path.join("checkpoints", "yolo", "train", "weights", "best.pt")
         model = YOLO(checkpoint)
         return model
     
@@ -50,8 +49,7 @@ class FineTunedModels:
             config = yaml.safe_load(f)
 
         # 2) Load model checkpoint
-        checkpoint_dict = dict(version="version_2", filename="epoch=11-val_loss=0.45.ckpt")
-        # checkpoint_dict = dict(version="version_1", filename="epoch=19-val_loss=0.90.ckpt")
+        checkpoint_dict = dict(version="version_0", filename="epoch=19-val_loss=0.45.ckpt")
         checkpoint = os.path.join(
             config["checkpoints_path"],
             "retinanet",

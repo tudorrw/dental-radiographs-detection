@@ -10,7 +10,7 @@ from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, ImageDraw, ImageFont
 
-from utils.get_models import FineTunedModels
+from api.get_models import FineTunedModels
 from utils.nms import UniqueClassNMSProcessor, CombinedNMS  # If you're using class-wise NMS
 from api.utils import clahe, decode_teeth_numbers, draw_boxes, read_convert_image, output_json
 
@@ -91,7 +91,10 @@ async def detect_teeth_yolov11(file: UploadFile = File(...)):
     scores_cpu = results.boxes.conf.cpu().numpy()
     labels_cpu = results.boxes.cls.cpu().numpy()
 
+
     predicted_quadrants, predicted_teeth, decoded_fdi_predicted_labels = decode_teeth_numbers(labels_cpu)
+    
+
     clahe_pil = clahe(image)
     img_str = draw_boxes(clahe_pil, boxes_cpu, predicted_quadrants, predicted_teeth)
     return output_json(img_str, boxes_cpu, scores_cpu, decoded_fdi_predicted_labels)

@@ -25,8 +25,7 @@ bash Miniconda3-latest-Linux-x86_64.sh
 pip install torch==2.6.0+cu124 torchvision==0.20.1 torchaudio --index-url https://download.pytorch.org/whl/cu124
 
 eval "$(/root/miniconda3/bin/conda shell.bash hook)"
-conda activate dental-dl
-
+checkpoint = torch.load(args.resume, map_location="cpu")
 ln -s /workspace/miniconda3 ~/miniconda3
 ln -s /workspace/dental-radiographs-detection ~/dental-radiographs-detection
 ln -s /workspace/.gitconfig ~/.gitconfig
