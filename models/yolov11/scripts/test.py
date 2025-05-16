@@ -5,7 +5,7 @@ from ultralytics import YOLO
 def test_yolo_model():
     BASE_FOLDER = os.path.dirname(os.path.abspath(__file__))
     # Path to your trained weights (the best.pt or last.pt)
-    CHECKPOINTS_FOLDER = os.path.join(BASE_FOLDER, "..", "..", "..", "runs", "detect", "train", "weights", "best.pt")
+    CHECKPOINTS_FOLDER = os.path.join(BASE_FOLDER, "..", "..", "..", "checkpoints", "yolo", "train3", "weights", "best.pt")
 
     # Path to your data.yaml, which includes 'test:' 
     CFG_PATH = os.path.join(BASE_FOLDER, "..", "teeth_enumeration.yaml")
@@ -27,7 +27,7 @@ def test_yolo_model():
     print("mAP (50-95):", metrics.box.map)      # Overall mAP (mean of mAP50..mAP95)
     print("mAP50:", metrics.box.map50)
     print("mAP75:", metrics.box.map75)
-    print("Per-class mAPs:", metrics.box.maps)  # list of mAP per-class
+    # print("Per-class mAPs:", metrics.box.maps)  # list of mAP per-class
 
 if __name__ == "__main__":
     test_yolo_model()
