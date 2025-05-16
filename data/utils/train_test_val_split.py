@@ -2,9 +2,9 @@ import json
 import pandas as pd
 import os
 import shutil
-import random
 from sklearn.model_selection import train_test_split
 from utils.mapper import ToothLabelMapper
+import matplotlib.pyplot as plt
 
 # Convert COCO bbox format (x, y, w, h) → Pascal VOC format (x_min, y_min, x_max, y_max)
 def xywh_to_xyxy(bbox):
@@ -116,8 +116,8 @@ def process_dino_data(dataset, image_ids):
                 # Calculate tooth ID (same as in YOLO process)
                 tooth_id = category_id_1 * 10 + category_id_2 + 1
                 # Use the tooth label mapper to get a consistent mapping
-                # mapped_class_id = int(label_mapper.encode([tooth_id])[0])
-                ann["category_id"] = category_id_1 * 8 + category_id_2
+                mapped_class_id = int(label_mapper.encode([tooth_id])[0])
+                ann["category_id"] = mapped_class_id
             
             annotations.append(ann)
     
@@ -178,9 +178,14 @@ def process_yolo_data(dataset, image_ids, origin_path, dataset_type, output_dir)
 # Compute statistics
 def flatten_annotations(data):
     rows = []
+    label_mapper = ToothLabelMapper()  
     for img in data:
         for ann in img["annotations"]:
-            rows.append({"image_id": img["id"], "bbox": ann["bbox"]})
+            category_id_1 = ann["category_id_1"]
+            category_id_2 = ann["category_id_2"]
+            tooth_id = category_id_1 * 10 + category_id_2 + 1
+            mapped_class_id = int(label_mapper.encode([tooth_id])[0])
+            rows.append({"image_id": img["id"], "bbox": ann["bbox"], "class_id": mapped_class_id})
     return pd.DataFrame(rows)
  
 # Save dataset in COCO JSON format (Single File) without duplicate annotations
@@ -251,6 +256,40 @@ def process_dino_data_with_dirs(dataset, image_ids, origin_path, dataset_type, o
     )
     
     print(f"[DINO] Train/Val/Test JSON and images saved for {dataset_type} in {output_dir}")
+
+def count_boxes_per_label(ann_df):
+    label_counts = ann_df['class_id'].value_counts().sort_index()
+    return label_counts
+
+
+def plot_combined_distribution(train_counts, val_counts, test_counts, save_path=None):
+    # Set style
+    plt.style.use('bmh')
+    
+    # Create figure
+    plt.figure(figsize=(15, 8))
+    
+    # Plot bars for each dataset
+    x = range(len(train_counts))
+    width = 0.25
+    
+    plt.bar([i - width for i in x], train_counts.values, width, label='Train', color='skyblue')
+    plt.bar(x, val_counts.values, width, label='Val', color='lightgreen')
+    plt.bar([i + width for i in x], test_counts.values, width, label='Test', color='salmon')
+    
+    plt.title('Combined Box Distribution Across All Datasets')
+    plt.xlabel('Tooth Label')
+    plt.ylabel('Number of Boxes')
+    plt.xticks(x, train_counts.index, rotation=45)
+    plt.legend()
+    plt.tight_layout()
+    
+    # Save plot if path is provided
+    if save_path:
+        plt.savefig(save_path)
+        print(f"Plot saved to {save_path}")
+    
+    plt.show()
 
 # Main function
 def main():
@@ -329,9 +368,31 @@ def main():
     val_ann_df = flatten_annotations(val_voc_data)
     test_ann_df = flatten_annotations(test_voc_data)
     
+    print("\nDataset Statistics:")
     print(f"Train: {train_ann_df['image_id'].nunique()} unique images, {train_ann_df.shape[0]} bboxes")
     print(f"Val: {val_ann_df['image_id'].nunique()} unique images, {val_ann_df.shape[0]} bboxes")
     print(f"Test: {test_ann_df['image_id'].nunique()} unique images, {test_ann_df.shape[0]} bboxes")
+    
+    print("\nBox Distribution per Tooth Label:")
+    print("\nTraining Set:")
+    train_counts = count_boxes_per_label(train_ann_df)
+    for label, count in train_counts.items():
+        print(f"Tooth {label}: {count} boxes")
+    
+    print("\nValidation Set:")
+    val_counts = count_boxes_per_label(val_ann_df)
+    for label, count in val_counts.items():
+        print(f"Tooth {label}: {count} boxes")
+    
+    print("\nTest Set:")
+    test_counts = count_boxes_per_label(test_ann_df)
+    for label, count in test_counts.items():
+        print(f"Tooth {label}: {count} boxes")
+    
+    # Create visualizations
+
+    plot_combined_distribution(train_counts, val_counts, test_counts,
+                             save_path='box_distribution_combined3.png')
 
 if __name__ == "__main__":
     main()
