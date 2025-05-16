@@ -1,37 +1,93 @@
 YOLO11x summary (fused): 190 layers, 56,865,139 parameters, 0 gradients, 194.6 GFLOPs
-                 Class     Images  Instances      Box(P          R      mAP50  mAP50-95): 100%|██████████| 4/4 [00:01<00:00,  3.78it/s]
-                   all         63       1795      0.917      0.919      0.941       0.53
-               Class_1         37         37      0.899      0.919      0.945      0.583
-               Class_2         52         52      0.834      0.942       0.91      0.564
-               Class_3         55         56      0.877      0.892       0.91      0.569
-               Class_4         56         56      0.855      0.875      0.942       0.56
-               Class_5         56         56      0.913      0.946      0.981      0.502
-               Class_6         62         62      0.968      0.967      0.993      0.565
-               Class_7         59         59      0.936      0.988      0.992      0.545
-               Class_8         62         62      0.958      0.984       0.99      0.584
-               Class_9         62         62      0.984      0.964      0.993      0.578
-              Class_10         61         61      0.951      0.951       0.97      0.533
-              Class_11         61         61      0.944      0.934      0.973      0.506
-              Class_12         55         56      0.927      0.913       0.94      0.451
-              Class_13         57         58      0.961      0.844      0.931      0.479
-              Class_14         52         52      0.848      0.865      0.925      0.543
-              Class_15         55         55       0.87      0.855      0.935      0.535
-              Class_16         42         42      0.946       0.83       0.95        0.5
-              Class_17         42         42      0.952      0.952      0.977      0.541
-              Class_18         55         55      0.908      0.873      0.925      0.577
-              Class_19         49         49      0.941      0.898      0.934      0.534
-              Class_20         59         59       0.88      0.872      0.835      0.444
-              Class_21         60         60      0.934      0.938      0.939      0.537
-              Class_22         62         62      0.944      0.952      0.973      0.548
-              Class_23         63         63      0.946      0.952      0.959      0.528
-              Class_24         62         63       0.94      0.937      0.937      0.528
-              Class_25         63         64      0.915      0.922      0.949      0.565
-              Class_26         62         63      0.934      0.921      0.931      0.502
-              Class_27         62         63       0.93      0.921      0.941      0.534
-              Class_28         60         61      0.919      0.926      0.924      0.506
-              Class_29         56         57      0.903      0.912      0.923      0.486
-              Class_30         47         49       0.89      0.898       0.89      0.513
-              Class_31         55         56      0.877      0.929      0.916      0.527
-              Class_32         42         42      0.867      0.929      0.893      0.497
+train
+mAP (50-95): 0.5719641198551002
+mAP50: 0.9452144251741552
+mAP75: 0.6113929329976481
+
+train2
+mAP (50-95): 0.5751274152244921
+mAP50: 0.9435458528152347
+mAP75: 0.6228222293118167
+
+
+
 
 best epoch 47 
+pentru faster rcnn
+
+pe batchuri de 16
+pt version_1: normal
+ val_map            0.4554142355918884
+  val_map_50            0.896947979927063
+  val_map_75           0.39262375235557556
+val_map_large         0.4567064046859741
+val_map_medium         0.34541255235671997
+
+pt version_2: cu data augmentation: coursedropout, shiftscalerotate, brightness
+A.RandomBrightnessContrast(p=0.3),
+            A.ShiftScaleRotate(p=0.3,
+                            shift_limit=0.1,
+                            scale_limit=0.1,
+                            rotate_limit=15),
+            A.CoarseDropout(num_holes_range=(5,5),
+                    hole_height_range=(70,80),
+                    hole_width_range=(70,80),
+                    fill=128,
+                    p=.25),
+
+         val_map            0.48196274042129517
+       val_map_50           0.9234312176704407
+       val_map_75           0.44540876150131226
+
+pt version_3: cu data augmentation: coursedropout, shiftscalerotate, brightness exact ca la 2
+si cu dropout in head
+         val_map            0.4606269598007202
+       val_map_50           0.8980305194854736
+       val_map_75           0.41342148184776306
+
+
+pe 150 epochs
+pt version_3: cu data augmentation: coursedropout, shiftscalerotate, brightness exact ca la 2 doar ca probabilitati mai mari
+si cu dropout in head
+         val_map            0.46597370505332947
+       val_map_50           0.9036909937858582
+       val_map_75           0.4157438576221466
+
+
+
+
+
+metamodel: faster rcnn version_5 cu retinanet version_2, wheights 1,2
+│ map                      │         0.4781029522418976 │
+│ map_50                   │         0.8955483436584473 │
+│ map_75                   │        0.46680912375450134 │
+│ map_large                │          0.480455607175827 │
+│ map_medium               │         0.2857879400253296 │
+
+metamodel: faster rcnn version_2 cu retinanet version_2, wheights 8.5,6
+weights=[7.5, 6], # or e.g. [2,1,1] if you trust RCNN more
+iou_thr=0.8,
+│ map                      │         0.4888171851634979 │
+│ map_50                   │          0.890539288520813 │
+│ map_75                   │         0.4966335594654083 │
+│ map_large                │         0.4907095730304718 │
+│ map_medium               │        0.32158416509628296 │
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
