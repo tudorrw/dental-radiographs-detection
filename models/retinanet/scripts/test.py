@@ -34,8 +34,8 @@ if __name__ == "__main__":
 
     test_loader = DataLoader(test_dataset, batch_size=config["batch_size"], num_workers=0, pin_memory=True, collate_fn=TeethDataset.collate_fn)
 
-    # checkpoint = os.path.join(config["checkpoints_path"], "faster_rcnn", "version_0", "epoch=44-val_loss=0.94.ckpt")
-    checkpoint = os.path.join(config["checkpoints_path"], "retinanet", "version_2", "epoch=11-val_loss=0.45.ckpt")
+    # checkpoint = os.path.join(config["checkpoints_path"], "retinanet", "version_1", "epoch=27-val_loss=0.44.ckpt")
+    checkpoint = os.path.join(config["checkpoints_path"], "retinanet", "version_2", "epoch=14-val_loss=0.40.ckpt")
     model = RetinaNet.load_from_checkpoint(checkpoint)
 
     trainer = pl.Trainer(

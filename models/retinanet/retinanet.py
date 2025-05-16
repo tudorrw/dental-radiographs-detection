@@ -37,8 +37,8 @@ class RetinaNet(L.LightningModule):
         self.id2label[0] = "Background"
     
     def _create_model(self):
-        model = torchvision.models.detection.retinanet_resnet50_fpn(
-            weights=RetinaNet_ResNet50_FPN_Weights.COCO_V1
+        model = torchvision.models.detection.retinanet_resnet50_fpn_v2(
+            weights=RetinaNet_ResNet50_FPN_V2_Weights.COCO_V1
         )
         num_anchors = model.head.classification_head.num_anchors
 
@@ -301,28 +301,33 @@ class RetinaNet(L.LightningModule):
         return predictions
 
     def configure_optimizers(self):
-        optimizer = torch.optim.SGD(
+        # Create Adam optimizer with weight decay for regularization
+        optimizer = torch.optim.Adam(
             self.parameters(),
             lr=self.learning_rate,
-            momentum=self.momentum,
+            weight_decay=1e-4,  # L2 regularization
+            betas=(0.9, 0.999),
+            eps=1e-8  
         )
 
-        return optimizer
-        # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        #     optimizer,
-        #     mode="max",  # maximize mAP
-        #     factor=0.1,  # reduce LR by this factor
-        #     patience=8,  # wait 20 epochs with no improvement
-        #     threshold=0.005,
-        #     cooldown=1,    
-        # )
+        # Create a learning rate scheduler
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            mode="min",
+            factor=0.1, 
+            patience=5, 
+            threshold=0.001,  # minimum change in monitored value
+            cooldown=2,  # wait 2 epochs after reducing LR
+            min_lr=1e-6
+        )
         
-        # return {
-        #     "optimizer": optimizer,
-        #     "lr_scheduler": {
-        #         "scheduler": scheduler,
-        #         "monitor": "train_loss",
-        #         "interval": "epoch",
-        #         "frequency": 1,
-        #     }
-        # 
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "monitor": "val_loss", 
+                "interval": "epoch",
+                "frequency": 1,
+            }
+        }
+        

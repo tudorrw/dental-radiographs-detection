@@ -39,9 +39,9 @@ if __name__ == "__main__":
 
 
     # DataLoaders
-    train_loader = DataLoader(train_dataset, batch_size=config["batch_size"], num_workers=4, collate_fn=TeethDataset.collate_fn)
+    train_loader = DataLoader(train_dataset, batch_size=config["batch_size"], num_workers=0, collate_fn=TeethDataset.collate_fn)
 
-    val_loader = DataLoader(val_dataset, batch_size=config["batch_size"], num_workers=4, collate_fn=TeethDataset.collate_fn)
+    val_loader = DataLoader(val_dataset, batch_size=config["batch_size"], num_workers=0, collate_fn=TeethDataset.collate_fn)
 
     # Model
     model = RetinaNet(num_classes=config["n_teeth"] + 1, learning_rate=float(config["learning_rate"]), momentum=float(config["momentum"]))
@@ -75,7 +75,7 @@ if __name__ == "__main__":
         accelerator="gpu",
         devices=1,
         logger=logger,
-        callbacks=[checkpoint_callback, early_stopping],
+        callbacks=[checkpoint_callback],
         # check_val_every_n_epoch=1,
     )
 
