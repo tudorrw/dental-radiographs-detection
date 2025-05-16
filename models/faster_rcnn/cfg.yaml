@@ -6,9 +6,9 @@ output_dir: results/faster_rcnn
 visualization_dir: visualizations/faster_rcnn
 format_type: voc
 n_teeth: 32
-max_epochs: 100
-batch_size: 8
-learning_rate: 1e-3
+max_epochs: 150
+batch_size: 16
+learning_rate: 0.001
 momentum: 0.9
 
 

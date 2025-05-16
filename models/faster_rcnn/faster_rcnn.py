@@ -7,6 +7,7 @@ import seaborn as sns
 import pytorch_lightning as L
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
+from torchvision.ops import box_iou
 from sklearn.metrics import confusion_matrix
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
@@ -55,16 +56,23 @@ class FasterRCNN(L.LightningModule):
         self.num_classes = num_classes
         self.learning_rate = learning_rate
         self.momentum = momentum
-        self.dropout_prob = 0.2
-        self.model = fasterrcnn_resnet50_fpn(weights = FasterRCNN_ResNet50_FPN_Weights.COCO_V1)
+        self.dropout_prob = 0.25  # Increased dropout
+        self.model = fasterrcnn_resnet50_fpn(weights=FasterRCNN_ResNet50_FPN_Weights.COCO_V1)  # Using V2 version
 
+        # Configure ROI heads
         in_channels = self.model.roi_heads.box_head.fc6.in_features
         representation_size = self.model.roi_heads.box_head.fc6.out_features
-        self.model.roi_heads.box_head = TwoMLPHeadWithDropout(in_channels, representation_size, self.dropout_prob)
+        # self.model.roi_heads.box_head = TwoMLPHeadWithDropout(in_channels, representation_size, self.dropout_prob)
 
+        # Configure box predictor
         in_features = self.model.roi_heads.box_predictor.cls_score.in_features
         self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features, self.num_classes)
-        print(f"Model: {self.model}")
+        
+        # Configure ROI pooling
+        # self.model.roi_heads.box_roi_pool.output_size = (7, 7)  # Increased ROI pooling size
+        
+
+        # print(f"Model: {self.model}")
         # Detection metrics
         self.metric = MeanAveragePrecision(box_format="xyxy")
         
@@ -75,11 +83,10 @@ class FasterRCNN(L.LightningModule):
         # Simple ID to label mapping for confusion matrix
         self.id2label = {i: str(i) for i in range(self.num_classes)}
         self.id2label[0] = "Background"
- 
- 
+
     def forward(self, images, targets=None):
         return self.model(images, targets)
- 
+
     def training_step(self, batch, batch_idx):
         images, targets = batch["image"], batch["targets"]
  
@@ -87,6 +94,7 @@ class FasterRCNN(L.LightningModule):
  
         loss_dict = self.forward(images, targets)
  
+        # Weight the losses
         total_loss = sum(loss for loss in loss_dict.values())
         self.log("train_loss", total_loss)
     
@@ -133,7 +141,7 @@ class FasterRCNN(L.LightningModule):
             pred_labels = pred_labels[keep_indices]
             
             # Calculate IoU between all pred and gt boxes
-            ious = self._box_iou(pred_boxes, true_boxes)
+            ious = box_iou(pred_boxes, true_boxes)
             
             # For each ground truth, find best matching prediction
             for gt_idx in range(len(true_labels)):
@@ -164,7 +172,6 @@ class FasterRCNN(L.LightningModule):
         self.metric.update(preds=predictions, target=targets)
         self.log("val_loss", total_loss)
  
-        return total_loss
         
     def on_validation_epoch_start(self):
         # Reset stored predictions and labels
@@ -188,30 +195,6 @@ class FasterRCNN(L.LightningModule):
         # Reset metrics for next epoch
         self.metric.reset()
         
-    def _box_iou(self, boxes1, boxes2):
-        """
-        Compute IoU between two sets of boxes of shape N x 4 and M x 4
-        boxes are in (x1, y1, x2, y2) format
-        
-        Returns IoU matrix of shape N x M
-        """
-        area1 = (boxes1[:, 2] - boxes1[:, 0]) * (boxes1[:, 3] - boxes1[:, 1])
-        area2 = (boxes2[:, 2] - boxes2[:, 0]) * (boxes2[:, 3] - boxes2[:, 1])
-        
-        # Get coordinates of intersection
-        lt = torch.max(boxes1[:, None, :2], boxes2[:, :2])  # left top [N,M,2]
-        rb = torch.min(boxes1[:, None, 2:], boxes2[:, 2:])  # right bottom [N,M,2]
-        
-        # Calculate intersection area
-        wh = (rb - lt).clamp(min=0)  # [N,M,2]
-        inter = wh[:, :, 0] * wh[:, :, 1]  # [N,M]
-        
-        # Calculate IoU
-        union = area1[:, None] + area2 - inter
-        iou = inter / union
-        
-        return iou
-
 
     def compute_confusion_matrix(self):
         """Compute and visualize confusion matrix with precision/recall metrics."""
@@ -294,7 +277,6 @@ class FasterRCNN(L.LightningModule):
         # Update detection metrics
         self.metric.update(preds=predictions, target=targets)
  
-        return predictions
 
     def on_test_epoch_end(self):
         # Compute and log detection metrics (mAP etc.)
@@ -355,27 +337,36 @@ class FasterRCNN(L.LightningModule):
                     'target_labels': str(target_labels)
                 })
         
-        return predictions
     
 
     def configure_optimizers(self):
-        optimizer = torch.optim.SGD(
-            params=self.parameters(),
-            lr=self.learning_rate,
-            momentum=self.momentum,
-            # weight_decay=0.0001,
-        )
+
+        optimizer = torch.optim.SGD(self.parameters(), lr=self.learning_rate, momentum=self.momentum)
         return optimizer
-        # scheduler = torch.optim.lr_scheduler.ExponentialLR(
-        #     optimizer, 
-        #     gamma=0.9  
+        # Use AdamW optimizer with weight decay
+        # optimizer = torch.optim.AdamW(
+        #     self.parameters(),
+        #     lr=self.learning_rate,
+        #     weight_decay=0.01,
+        #     betas=(0.9, 0.999)
         # )
-        # # 5) Return the config as a dict
+        
+        # # Use OneCycleLR scheduler
+        # scheduler = torch.optim.lr_scheduler.OneCycleLR(
+        #     optimizer,
+        #     max_lr=self.learning_rate,
+        #     epochs=self.trainer.max_epochs,
+        #     steps_per_epoch=self.trainer.max_epochs,
+        #     pct_start=0.3,
+        #     anneal_strategy='cos',
+        #     div_factor=25.0,
+        #     final_div_factor=1000.0
+        # )
+        
         # return {
         #     "optimizer": optimizer,
         #     "lr_scheduler": {
         #         "scheduler": scheduler,
-        #         "interval": "epoch",  # step each epoch
-        #         "frequency": 1,
+        #         "interval": "step",
         #     },
         # }

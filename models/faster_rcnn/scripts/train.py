@@ -39,9 +39,9 @@ if __name__ == "__main__":
 
 
     # DataLoaders
-    train_loader = DataLoader(train_dataset, batch_size=config["batch_size"], num_workers=8, collate_fn=TeethDataset.collate_fn)
+    train_loader = DataLoader(train_dataset, batch_size=config["batch_size"], num_workers=0, collate_fn=TeethDataset.collate_fn)
 
-    val_loader = DataLoader(val_dataset, batch_size=config["batch_size"], num_workers=8, collate_fn=TeethDataset.collate_fn)
+    val_loader = DataLoader(val_dataset, batch_size=config["batch_size"], num_workers=0, collate_fn=TeethDataset.collate_fn)
 
     # Model
     model = FasterRCNN(num_classes=config["n_teeth"] + 1, learning_rate=float(config["learning_rate"]), momentum=float(config["momentum"]))
@@ -65,7 +65,7 @@ if __name__ == "__main__":
     
     early_stopping = EarlyStopping(
         monitor="val_loss",
-        patience=10,  # Stop after 10 epochs without improvement
+        patience=30,  # Stop after 10 epochs without improvement
         mode="min",
     )
     
@@ -74,7 +74,7 @@ if __name__ == "__main__":
         accelerator="gpu",
         devices=1,
         logger=logger,
-        callbacks=[checkpoint_callback, early_stopping],
+        callbacks=[checkpoint_callback],
     )
 
     # Train

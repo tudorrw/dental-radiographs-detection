@@ -35,8 +35,13 @@ if __name__ == "__main__":
 
     test_loader = DataLoader(test_dataset, batch_size=config["batch_size"], num_workers=0, pin_memory=True, collate_fn=TeethDataset.collate_fn)
 
-    checkpoint = os.path.join(config["checkpoints_path"], "faster_rcnn", "version_0", "epoch=21-val_loss=0.82.ckpt")
-    # checkpoint = os.path.join(config["checkpoints_path"], "faster_rcnn", "version_1", "epoch=77-val_loss=0.88.ckpt")
+    # checkpoint = os.path.join(config["checkpoints_path"], "faster_rcnn", "version_0", "epoch=69-val_loss=0.81.ckpt")
+    # checkpoint = os.path.join(config["checkpoints_path"], "faster_rcnn", "version_1", "epoch=63-val_loss=0.80.ckpt")
+    checkpoint = os.path.join(config["checkpoints_path"], "faster_rcnn", "version_2", "epoch=75-val_loss=0.77.ckpt")
+    # checkpoint = os.path.join(config["checkpoints_path"], "faster_rcnn", "version_3", "epoch=93-val_loss=0.88.ckpt")
+    # checkpoint = os.path.join(config["checkpoints_path"], "faster_rcnn", "version_4", "epoch=107-val_loss=0.86.ckpt")
+    # checkpoint = os.path.join(config["checkpoints_path"], "faster_rcnn", "version_5", "epoch=63-val_loss=0.79.ckpt")
+
     # checkpoint = os.path.join(config["checkpoints_path"], "faster_rcnn", "k_fold", "fold_1" ,"epoch=29-val_loss=0.7546.ckpt")
     model = FasterRCNN.load_from_checkpoint(checkpoint)
 
