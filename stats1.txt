@@ -35,36 +35,43 @@ A.RandomBrightnessContrast(p=0.3),
                     fill=128,
                     p=.25),
 
-         val_map            0.48196274042129517
-       val_map_50           0.9234312176704407
-       val_map_75           0.44540876150131226
+val_map            0.48196274042129517
+val_map_50         0.9234312176704407
+val_map_75         0.44540876150131226
 
 pt version_3: cu data augmentation: coursedropout, shiftscalerotate, brightness exact ca la 2
 si cu dropout in head
-         val_map            0.4606269598007202
-       val_map_50           0.8980305194854736
-       val_map_75           0.41342148184776306
+val_map            0.4606269598007202
+val_map_50         0.8980305194854736
+val_map_75         0.41342148184776306
 
 
 pe 150 epochs
-pt version_3: cu data augmentation: coursedropout, shiftscalerotate, brightness exact ca la 2 doar ca probabilitati mai mari
+pt version_34 cu data augmentation: coursedropout, shiftscalerotate, brightness exact ca la 2 doar ca probabilitati mai mari
 si cu dropout in head
-         val_map            0.46597370505332947
-       val_map_50           0.9036909937858582
-       val_map_75           0.4157438576221466
+val_map            0.46597370505332947
+val_map_50         0.9036909937858582
+val_map_75         0.4157438576221466
 
 
 
 
+retinanet version_2
+val_map            0.4956757128238678
+val_map_50         0.9127655029296875
+val_map_75         0.48675718903541565
 
-metamodel: faster rcnn version_5 cu retinanet version_2, wheights 1,2
+
+
+
+metamodel: faster rcnn version_5 cu retinanet version_1, wheights 1,2
 │ map                      │         0.4781029522418976 │
 │ map_50                   │         0.8955483436584473 │
 │ map_75                   │        0.46680912375450134 │
 │ map_large                │          0.480455607175827 │
 │ map_medium               │         0.2857879400253296 │
 
-metamodel: faster rcnn version_2 cu retinanet version_2, wheights 8.5,6
+metamodel: faster rcnn version_2 cu retinanet version_1
 weights=[7.5, 6], # or e.g. [2,1,1] if you trust RCNN more
 iou_thr=0.8,
 │ map                      │         0.4888171851634979 │
@@ -76,10 +83,27 @@ iou_thr=0.8,
 
 
 
+metamodel: faster rcnn version_2 cu retinanet version_2
+weights=[5, 8.5],
+iou_thr=0.55,
+│ map                      │        0.49758419394493103 │
+│ map_50                   │         0.9010775685310364 │
+│ map_75                   │         0.5004485845565796 │
 
 
+metamodel: faster rcnn version_2 cu retinanet version_2
+weights=[5.35, 7.9],
+iou_thr=0.55,
+│ map                      │         0.4978031516075134 │
+│ map_50                   │         0.9019688367843628 │
+│ map_75                   │          0.500857949256897
 
-
+metamodel: faster rcnn version_2 cu retinanet version_2
+weights=[1.15,2],
+iou_thr=0.65,
+│ map                      │        0.49796658754348755 │
+│ map_50                   │         0.9010446071624756 │
+│ map_75                   │         0.5011183619499207 │
 
 
 

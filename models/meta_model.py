@@ -9,7 +9,7 @@ from torchmetrics.detection.mean_ap import MeanAveragePrecision
 from tqdm import tqdm
 # Make sure these imports point to the right modules
 from utils.wbf import weighted_boxes_fusion
-from api.get_models import FineTunedModels
+from utils.get_models import FineTunedModels
 from torch.utils.data import DataLoader
 from data.rcnn_teeth_dataset import TeethDataset
 from utils.nms import UniqueClassNMSProcessor, CombinedNMS  # If you're using class-wise NMS
@@ -95,7 +95,15 @@ def ensemble_predict(rcnn_model, retinanet_model, yolo_model, dataloader, iou_th
 
             # print(f"ret filtered labels: {rcnn_labels}")
 
-            # img_for_yolo = (img_tensor.permute(1,2,0).cpu().numpy() * 255).astype(np.uint8)
+            # Convert image for YOLO - ensure it's in the correct format
+            # img_for_yolo = img_tensor.cpu().numpy()  # [C, H, W]
+            # img_for_yolo = np.transpose(img_for_yolo, (1, 2, 0))  # [H, W, C]
+            # img_for_yolo = (img_for_yolo * 255).astype(np.uint8)
+            
+            # # Ensure image has 3 channels (YOLO expects RGB)
+            # if img_for_yolo.shape[-1] == 1:
+            #     img_for_yolo = np.repeat(img_for_yolo, 3, axis=-1)
+            
             # yolo_out = yolo_model.predict(img_for_yolo, conf=0.5)[0]
             # yolo_boxes  = yolo_out.boxes.xyxy.cpu().numpy()
             # yolo_scores = yolo_out.boxes.conf.cpu().numpy()
@@ -124,8 +132,10 @@ def ensemble_predict(rcnn_model, retinanet_model, yolo_model, dataloader, iou_th
                 boxes_list,
                 scores_list,
                 labels_list,
-                weights=[1, 2], # or e.g. [2,1,1] if you trust RCNN more
+                # weights=[7.5, 6], # or e.g. [2,1,1] if you trust RCNN more
+                weights=[1.15,2],
                 iou_thr=0.55,
+                conf_type="avg",
             )
 
             # Denormalize back to pixels
@@ -176,6 +186,6 @@ if __name__ == '__main__':
     dataset_type="test"
     )
 
-    test_loader = DataLoader(test_dataset, batch_size=4, num_workers=0, pin_memory=True, collate_fn=TeethDataset.collate_fn)
+    test_loader = DataLoader(test_dataset, batch_size=16, num_workers=0, pin_memory=True, collate_fn=TeethDataset.collate_fn)
     ensemble_predict(rcnn_model, retinanet_model, yolo_model, test_loader)
 
