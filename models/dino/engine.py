@@ -9,6 +9,7 @@ import sys
 from typing import Iterable
 
 from utils.utils import slprint, to_device
+from utils.box_ops import box_cxcywh_to_xyxy
 
 import torch
 
@@ -141,6 +142,26 @@ def train_one_epoch(
     return resstat
 
 
+def denormalize_boxes(boxes, w, h):
+    """
+    Convert normalized coords [0..1] → pixel coords in COCO format [x,y,width,height].
+    Input boxes are in format [x1,y1,x2,y2] normalized to [0,1]
+    """
+    boxes = boxes.float()
+    # Convert from normalized [x1,y1,x2,y2] to COCO format [x,y,width,height]
+    x1 = boxes[:, 0] * w
+    y1 = boxes[:, 1] * h
+    x2 = boxes[:, 2] * w
+    y2 = boxes[:, 3] * h
+    
+    # Convert to COCO format
+    boxes[:, 0] = x1  # x
+    boxes[:, 1] = y1  # y
+    boxes[:, 2] = x2 - x1  # width
+    boxes[:, 3] = y2 - y1  # height
+    return boxes
+
+
 @torch.no_grad()
 def evaluate(
     model,
@@ -166,7 +187,7 @@ def evaluate(
     metric_logger = utils.MetricLogger(delimiter="  ")
     if not wo_class_error:
         metric_logger.add_meter("class_error", utils.SmoothedValue(window_size=1, fmt="{value:.2f}"))
-    header = "Test:"
+    header = "Evaluate:"
 
     iou_types = tuple(k for k in ("segm", "bbox") if k in postprocessors.keys())
     useCats = True
@@ -224,7 +245,9 @@ def evaluate(
             data_iter.set_postfix({'loss': f'{loss_value:.4f}'})
 
         orig_target_sizes = torch.stack([t["orig_size"] for t in targets], dim=0)
+
         results = postprocessors["bbox"](outputs, orig_target_sizes)
+        # print("results: ", results)
         # [scores: [100], labels: [100], boxes: [100, 4]] x B
         if "segm" in postprocessors.keys():
             target_sizes = torch.stack([t["size"] for t in targets], dim=0)
@@ -238,8 +261,18 @@ def evaluate(
             pred_scores = output["scores"]
             pred_labels = output["labels"]
             
-            true_boxes = target["boxes"]
-            true_labels = target["labels"]
+            # First denormalize the target boxes
+            denorm_boxes = target["boxes"].clone()
+            denorm_boxes[:, [0,2]] *= orig_target_sizes[0][1]  # scale x coordinates by width
+            denorm_boxes[:, [1,3]] *= orig_target_sizes[0][0]  # scale y coordinates by height
+            
+            print("pred_boxes: ", pred_boxes)
+            print("pred_labels: ", pred_labels)
+            print("pred_scores: ", pred_scores)
+            # Then convert to xyxy format
+            true_boxes = box_cxcywh_to_xyxy(denorm_boxes)
+            # Adjust labels: add 1 to make teeth 1-32 (from 0-31)
+            true_labels = target["labels"] + 1
             
             # Skip if no ground truth or predictions
             if len(true_boxes) == 0 or len(pred_boxes) == 0:
@@ -250,12 +283,14 @@ def evaluate(
             keep_indices = torch.where(pred_scores > score_threshold)[0]
             if len(keep_indices) == 0:
                 continue
-                
             pred_boxes = pred_boxes[keep_indices]
             pred_labels = pred_labels[keep_indices]
             
             # Calculate IoU between all pred and gt boxes
+            print("pred_boxes: ", pred_boxes)
+            print("true_boxes: ", true_boxes)
             ious = box_iou(pred_boxes, true_boxes)
+            print("ious: ", ious)
             
             # For each ground truth, find best matching prediction
             for gt_idx in range(len(true_labels)):
@@ -271,7 +306,7 @@ def evaluate(
                 
                 # If IoU is high enough, consider it a match
                 if best_iou > 0.5:
-                    all_pred_labels.append(pred_labels[best_idx].item())
+                    all_pred_labels.append(pred_labels[best_idx].item() + 1)  # Add 1 to make teeth 1-32
                     
                     # Remove this prediction to avoid double matching
                     mask = torch.ones(ious.shape[0], dtype=torch.bool, device=ious.device)

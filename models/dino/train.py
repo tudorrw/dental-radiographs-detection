@@ -355,8 +355,7 @@ def main(args):
             **{f"train_{k}": v for k, v in train_stats.items()},
             **{f"test_{k}": v for k, v in test_stats.items()},
         }
-
-        # EMA evaluation
+         # eval ema
         if args.use_ema:
             ema_test_stats, ema_coco_evaluator = evaluate(
                 ema_m.module,
@@ -369,23 +368,22 @@ def main(args):
                 wo_class_error=wo_class_error,
                 args=args,
                 logger=(logger if args.save_log else None),
-                epoch=epoch,
             )
-            # Log EMA metrics
-            if args.rank == 0:
-                writer.add_scalar('val/ema_mAP', ema_test_stats["coco_eval_bbox"][0], epoch)
-                writer.add_scalar('val/ema_mAP50', ema_test_stats["coco_eval_bbox"][1], epoch)
-                writer.add_scalar('val/ema_mAP75', ema_test_stats["coco_eval_bbox"][2], epoch)
-                if "precision" in ema_test_stats:
-                    writer.add_scalar('val/ema_precision', ema_test_stats["precision"], epoch)
-                if "recall" in ema_test_stats:
-                    writer.add_scalar('val/ema_recall', ema_test_stats["recall"], epoch)
-                if "f1" in ema_test_stats:
-                    writer.add_scalar('val/ema_f1', ema_test_stats["f1"], epoch)
-
             log_stats.update({f"ema_test_{k}": v for k, v in ema_test_stats.items()})
             map_ema = ema_test_stats["coco_eval_bbox"][0]
             _isbest = best_map_holder.update(map_ema, epoch, is_ema=True)
+            if _isbest:
+                checkpoint_path = output_dir / "checkpoint_best_ema.pth"
+                utils.save_on_master(
+                    {
+                        "model": ema_m.module.state_dict(),
+                        "optimizer": optimizer.state_dict(),
+                        "lr_scheduler": lr_scheduler.state_dict(),
+                        "epoch": epoch,
+                        "args": args,
+                    },
+                    checkpoint_path,
+                )
 
         if args.output_dir:
             checkpoint_paths = [output_dir / "checkpoint.pth"]
