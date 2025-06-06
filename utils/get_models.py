@@ -3,6 +3,12 @@ import yaml
 from models.faster_rcnn.faster_rcnn import FasterRCNN
 from models.retinanet.retinanet import RetinaNet
 from ultralytics import YOLO
+import torch
+import models.dino.datasets.transforms as DT
+from utils.slconfig import SLConfig
+import numpy as np
+from PIL import Image
+
 
 class FineTunedModels:
     def __init__(self, device):
@@ -62,3 +68,29 @@ class FineTunedModels:
         model.eval()
         model.to(self.device)
         return model
+    
+    def get_dino_model(self):
+        
+        dino_model_config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "models/dino/configs/DINO_4scale.py")
+        dino_cfg = SLConfig.fromfile(dino_model_config_path)
+        dino_cfg.device = "cuda" if self.device == "cuda" else "cpu"
+        model_checkpoint_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "checkpoints/dino/version_0/checkpoint0031.pth")
+        model, criterion, postprocessors = self.build_model_main(dino_cfg)
+        
+        checkpoint = torch.load(model_checkpoint_path, map_location="cpu")
+        model.load_state_dict(checkpoint["model"])
+        if self.device == "cuda":
+            model.cuda()
+        model.eval()
+        return model, postprocessors
+        
+        
+    def build_model_main(self, args):
+        from models.dino.registry import MODULE_BUILD_FUNCS
+
+        assert args.modelname in MODULE_BUILD_FUNCS._module_dict
+        build_func = MODULE_BUILD_FUNCS.get(args.modelname)
+        model, criterion, postprocessors = build_func(args)
+        return model, criterion, postprocessors
+
+

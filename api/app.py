@@ -10,9 +10,10 @@ from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, ImageDraw, ImageFont
 
-from api.get_models import FineTunedModels
+from utils.get_models import FineTunedModels
 from utils.nms import UniqueClassNMSProcessor, CombinedNMS  # If you're using class-wise NMS
-from api.utils import clahe, decode_teeth_numbers, draw_boxes, read_convert_image, output_json
+from api.utils import clahe, clahe_for_dino, decode_teeth_numbers, draw_boxes, read_convert_image, output_json
+import models.dino.datasets.transforms as DT
 
 #for decoding the FDI numbers
 
@@ -149,6 +150,55 @@ async def detect_teeth_retinanet(file: UploadFile = File(...)):
     return output_json(img_str, final_boxes, final_scores, decoded_fdi_predicted_labels)
 
 
+dino_model, postprocessors = models.get_dino_model()
+
+@app.post("/detections/dino")
+async def detect_teeth_dino(file: UploadFile = File(...)):
+    image = await read_convert_image(file)
+    
+    transforms = DT.Compose([
+        DT.RandomResize([800], max_size=1333),
+        DT.ToTensor(),
+        DT.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ])
+    image, _ = transforms(image, None)
+    image_shape = image.shape[1:]  # Get H, W from C, H, W
+    if device == "cuda":
+        image = image.cuda()
+            
+    outputs = dino_model(image.unsqueeze(0))
+    scale = torch.tensor([image_shape])
+    if device == "cuda":
+        scale = scale.cuda()
+            
+    output = postprocessors["bbox"](outputs, scale)[0]
+
+    # Post-process predictions
+    scores = output["scores"]
+    labels = output["labels"]
+    boxes = output["boxes"]
+    
+    # Filter by confidence threshold
+    select_mask = scores > 0.3
+    scores_cpu = scores[select_mask].cpu().numpy()
+    labels_cpu = (labels[select_mask] + 1).cpu().numpy()  # Increment labels by 1
+    boxes_cpu = boxes[select_mask].cpu().numpy()
+    
+    print(scores_cpu)
+    print(labels_cpu)
+    print(boxes_cpu)
+    
+    cpu_dict = {
+        "scores": scores,
+        "labels": labels,
+        "boxes": boxes
+    }
+    
+    predicted_quadrants, predicted_teeth, decoded_fdi_predicted_labels = decode_teeth_numbers(labels_cpu)
+    
+    clahe_pil = clahe_for_dino(image)
+    img_str = draw_boxes(clahe_pil, boxes_cpu, predicted_quadrants, predicted_teeth)
+    return output_json(img_str, boxes_cpu, scores_cpu, decoded_fdi_predicted_labels)
 
 if __name__ == "__main__":
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)

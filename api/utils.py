@@ -4,7 +4,7 @@ import io
 import base64
 from PIL import Image, ImageDraw, ImageFont
 from utils.mapper import ToothLabelMapper
-
+import torch
 
 async def read_convert_image(file):
     contents = await file.read()
@@ -16,6 +16,31 @@ def clahe(image):
     gray_img = cv2.cvtColor(np_img, cv2.COLOR_RGB2GRAY)
     clahe = cv2.createCLAHE(clipLimit=1.0, tileGridSize=(8, 8))
     clahe_img = clahe.apply(gray_img)  # shape (H, W)
+    return Image.fromarray(clahe_img).convert("RGB")
+
+def clahe_for_dino(image_tensor):
+    """
+    image_tensor: PyTorch tensor (C, H, W), normalized, float32
+    Returns: PIL Image (RGB) after CLAHE applied to grayscale
+    """
+    import torchvision.transforms.functional as TF
+
+    # Convert to (H, W, C) numpy array
+    image = image_tensor.clone().detach().cpu()
+    image = image * torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)  # std
+    image = image + torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)  # mean
+    image = image.clamp(0, 1)
+
+    np_img = (image.permute(1, 2, 0).numpy() * 255).astype(np.uint8)  # HWC, uint8
+
+    # Convert to grayscale
+    gray_img = cv2.cvtColor(np_img, cv2.COLOR_RGB2GRAY)
+
+    # Apply CLAHE
+    clahe = cv2.createCLAHE(clipLimit=1.0, tileGridSize=(8, 8))
+    clahe_img = clahe.apply(gray_img)  # shape (H, W)
+
+    # Convert back to PIL RGB (grayscale → RGB)
     return Image.fromarray(clahe_img).convert("RGB")
 
 def quadrant_color(q):
