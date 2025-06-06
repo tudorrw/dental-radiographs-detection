@@ -156,17 +156,20 @@ dino_model, postprocessors = models.get_dino_model()
 async def detect_teeth_dino(file: UploadFile = File(...)):
     image = await read_convert_image(file)
     
+    image_np = np.array(image)
+    image_shape = image_np.shape[:2]
+    
     transforms = DT.Compose([
         DT.RandomResize([800], max_size=1333),
         DT.ToTensor(),
         DT.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
-    image, _ = transforms(image, None)
-    image_shape = image.shape[1:]  # Get H, W from C, H, W
+    image_tensor = image.copy()
+    image_tensor, _ = transforms(image_tensor, None)
     if device == "cuda":
-        image = image.cuda()
+        image_tensor = image_tensor.cuda()
             
-    outputs = dino_model(image.unsqueeze(0))
+    outputs = dino_model(image_tensor.unsqueeze(0))
     scale = torch.tensor([image_shape])
     if device == "cuda":
         scale = scale.cuda()
@@ -196,7 +199,7 @@ async def detect_teeth_dino(file: UploadFile = File(...)):
     
     predicted_quadrants, predicted_teeth, decoded_fdi_predicted_labels = decode_teeth_numbers(labels_cpu)
     
-    clahe_pil = clahe_for_dino(image)
+    clahe_pil = clahe(image)
     img_str = draw_boxes(clahe_pil, boxes_cpu, predicted_quadrants, predicted_teeth)
     return output_json(img_str, boxes_cpu, scores_cpu, decoded_fdi_predicted_labels)
 

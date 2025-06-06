@@ -74,7 +74,7 @@ class FineTunedModels:
         dino_model_config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "models/dino/configs/DINO_4scale.py")
         dino_cfg = SLConfig.fromfile(dino_model_config_path)
         dino_cfg.device = "cuda" if self.device == "cuda" else "cpu"
-        model_checkpoint_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "checkpoints/dino/version_0/checkpoint0031.pth")
+        model_checkpoint_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "checkpoints/dino/version_1/checkpoint0027.pth")
         model, criterion, postprocessors = self.build_model_main(dino_cfg)
         
         checkpoint = torch.load(model_checkpoint_path, map_location="cpu")

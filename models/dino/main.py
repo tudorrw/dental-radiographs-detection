@@ -268,8 +268,8 @@ def main(args):
             wo_class_error=wo_class_error,
             args=args,
             logger=(logger if args.save_log else None),
-            epoch=None,
-            # epoch=epoch,
+            # epoch=None,
+            epoch=epoch,
         )
         if args.output_dir:
             utils.save_on_master(coco_evaluator.coco_eval["bbox"].eval, output_dir / "eval.pth")

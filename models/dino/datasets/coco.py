@@ -23,7 +23,7 @@ from pycocotools import mask as coco_mask
 from .data_util import preparing_dataset
 from . import transforms as T
 from utils.box_ops import box_cxcywh_to_xyxy, box_iou
-
+import models.dino.datasets.sltransform as SLT
 __all__ = ["build"]
 
 
@@ -585,7 +585,7 @@ def make_coco_transforms(image_set, fix_size=False, strong_aug=False, args=None)
             )
 
         if strong_aug:
-            import datasets.sltransform as SLT
+
 
             return T.Compose(
                 [
@@ -616,6 +616,7 @@ def make_coco_transforms(image_set, fix_size=False, strong_aug=False, args=None)
             [
                 # T.RandomHorizontalFlip(),
                 T.RandomResize(scales_1, max_size=max_size),
+                SLT.Albumentations(),
                 # T.RandomSelect(
                 #     T.RandomResize(scales, max_size=max_size),
                 #     T.Compose(
