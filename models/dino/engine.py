@@ -265,9 +265,9 @@ def evaluate(
             denorm_boxes[:, [0,2]] *= orig_target_sizes[0][1]  # scale x coordinates by width
             denorm_boxes[:, [1,3]] *= orig_target_sizes[0][0]  # scale y coordinates by height
             
-            print("pred_boxes: ", pred_boxes)
-            print("pred_labels: ", pred_labels)
-            print("pred_scores: ", pred_scores)
+            # print("pred_boxes: ", pred_boxes)
+            # print("pred_labels: ", pred_labels)
+            # print("pred_scores: ", pred_scores)
             # Then convert to xyxy format
             true_boxes = box_cxcywh_to_xyxy(denorm_boxes)
             # Adjust labels: add 1 to make teeth 1-32 (from 0-31)
@@ -286,10 +286,10 @@ def evaluate(
             pred_labels = pred_labels[keep_indices]
             
             # Calculate IoU between all pred and gt boxes
-            print("pred_boxes: ", pred_boxes)
-            print("true_boxes: ", true_boxes)
+            # print("pred_boxes: ", pred_boxes)
+            # print("true_boxes: ", true_boxes)
             ious = box_iou(pred_boxes, true_boxes)
-            print("ious: ", ious)
+            # print("ious: ", ious)
             
             # For each ground truth, find best matching prediction
             for gt_idx in range(len(true_labels)):

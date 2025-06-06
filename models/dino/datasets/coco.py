@@ -545,6 +545,7 @@ def make_coco_transforms(image_set, fix_size=False, strong_aug=False, args=None)
 
     # config the params for data aug
     scales = [480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800]
+    scales_1 = [800]
     max_size = 1333
     scales2_resize = [400, 500, 600]
     scales2_crop = [384, 600]
@@ -576,7 +577,7 @@ def make_coco_transforms(image_set, fix_size=False, strong_aug=False, args=None)
         if fix_size:
             return T.Compose(
                 [
-                    # T.RandomHorizontalFlip(),
+                    T.RandomHorizontalFlip(),
                     T.RandomResize([(max_size, max(scales))]),
                     # T.RandomResize([(512, 512)]),
                     normalize,
@@ -588,7 +589,7 @@ def make_coco_transforms(image_set, fix_size=False, strong_aug=False, args=None)
 
             return T.Compose(
                 [
-                    # T.RandomHorizontalFlip(),
+                    T.RandomHorizontalFlip(),
                     T.RandomSelect(
                         T.RandomResize(scales, max_size=max_size),
                         T.Compose(
@@ -614,16 +615,17 @@ def make_coco_transforms(image_set, fix_size=False, strong_aug=False, args=None)
         return T.Compose(
             [
                 # T.RandomHorizontalFlip(),
-                T.RandomSelect(
-                    T.RandomResize(scales, max_size=max_size),
-                    T.Compose(
-                        [
-                            T.RandomResize(scales2_resize),
-                            T.RandomSizeCrop(*scales2_crop),
-                            T.RandomResize(scales, max_size=max_size),
-                        ]
-                    ),
-                ),
+                T.RandomResize(scales_1, max_size=max_size),
+                # T.RandomSelect(
+                #     T.RandomResize(scales, max_size=max_size),
+                #     T.Compose(
+                #         [
+                #             T.RandomResize(scales2_resize),
+                #             T.RandomSizeCrop(*scales2_crop),
+                #             T.RandomResize(scales, max_size=max_size),
+                #         ]
+                #     ),
+                # ),
                 normalize,
             ]
         )
@@ -637,7 +639,7 @@ def make_coco_transforms(image_set, fix_size=False, strong_aug=False, args=None)
                     normalize,
                 ]
             )
-
+        print("scales: ", max(scales))
         return T.Compose(
             [
                 T.RandomResize([max(scales)], max_size=max_size),

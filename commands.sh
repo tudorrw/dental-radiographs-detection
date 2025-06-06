@@ -36,8 +36,9 @@ python -m models.visualize_results
 
 
 # commands for dino
+#train
 # with 4 feature maps
-python -m models.dino.train \
+python -m models.dino.main \
 	-c models/dino/configs/DINO_4scale.py \
 	--output_dir checkpoints/dino/version_0 \
 	--pretrain_model_path checkpoints/dino/pretrained/checkpoint0033_4scale.pth \
@@ -47,7 +48,7 @@ python -m models.dino.train \
     --finetune_ignore label_enc.weight class_embed
 
 # with 5 feature maps
-python -m models.dino.train \
+python -m models.dino.main \
 	-c models/dino/configs/DINO_5scale.py \
 	--output_dir checkpoints/dino/version_1 \
 	--pretrain_model_path checkpoints/dino/pretrained/checkpoint0031_5scale.pth \
@@ -55,6 +56,17 @@ python -m models.dino.train \
 	dn_label_coef=1.0 dn_bbox_coef=1.0 use_ema=False \
 	dn_box_noise_scale=1.0 \
     --finetune_ignore label_enc.weight class_embed
+
+
+#eval
+python -m models.dino.main \
+  --output_dir logs/DINO/R50-MS4-%j \
+	-c models/dino/configs/DINO_4scale.py \
+	--eval --resume checkpoints/dino/version_1/checkpoint0027.pth \
+	--options dn_scalar=100 embed_init_tgt=TRUE \
+	dn_label_coef=1.0 dn_bbox_coef=1.0 use_ema=False \
+	dn_box_noise_scale=1.0
+
 
 tensorboard --logdir=checkpoints/dino
 
