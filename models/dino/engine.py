@@ -19,7 +19,6 @@ from .datasets.panoptic_eval import PanopticEvaluator
 import numpy as np
 from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
-from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from torchvision.ops import box_iou
 import seaborn as sns
@@ -272,14 +271,14 @@ def evaluate(
             # Then convert to xyxy format
             true_boxes = box_cxcywh_to_xyxy(denorm_boxes)
             # Adjust labels: add 1 to make teeth 1-32 (from 0-31)
-            true_labels = target["labels"] + 1
+            true_labels = target["labels"]
             
             # Skip if no ground truth or predictions
             if len(true_boxes) == 0 or len(pred_boxes) == 0:
                 continue
                 
             # Filter predictions by score threshold
-            score_threshold = 0.5
+            score_threshold = 0.3
             keep_indices = torch.where(pred_scores > score_threshold)[0]
             if len(keep_indices) == 0:
                 continue
@@ -298,7 +297,7 @@ def evaluate(
                 all_gt_labels.append(gt_label)
                 
                 if len(ious) == 0:  # No predictions for this image
-                    all_pred_labels.append(0)  # Background
+                    # all_pred_labels.append(-1)  # Background
                     continue
                 
                 # Find best prediction match
@@ -306,7 +305,7 @@ def evaluate(
                 
                 # If IoU is high enough, consider it a match
                 if best_iou > 0.5:
-                    all_pred_labels.append(pred_labels[best_idx].item() + 1)  # Add 1 to make teeth 1-32
+                    all_pred_labels.append(pred_labels[best_idx].item())  # Add 1 to make teeth 1-32
                     
                     # Remove this prediction to avoid double matching
                     mask = torch.ones(ious.shape[0], dtype=torch.bool, device=ious.device)
@@ -315,7 +314,7 @@ def evaluate(
                     pred_labels = pred_labels[mask]
                 else:
                     # No match with high enough IoU
-                    all_pred_labels.append(0)  # Consider as background
+                    all_pred_labels.append(-1)  # Consider as background
 
         if coco_evaluator is not None:
             coco_evaluator.update(res)
@@ -392,14 +391,21 @@ def evaluate(
         y_true = np.array(all_gt_labels)
         y_pred = np.array(all_pred_labels)
         
-        # Get unique classes
-        classes = sorted(np.unique(np.concatenate([y_true, y_pred])))
+        # Ensure both arrays have the same length by padding with -1 (background)
+        max_len = max(len(y_true), len(y_pred))
+        y_true_padded = np.full(max_len, -1)
+        y_pred_padded = np.full(max_len, -1)
+        y_true_padded[:len(y_true)] = y_true
+        y_pred_padded[:len(y_pred)] = y_pred
+        
+        # Get unique classes (including background -1)
+        classes = np.arange(-1, 32)  # -1 for background, 0-31 for teeth
         
         # Compute confusion matrix
-        cm = confusion_matrix(y_true, y_pred, labels=classes)
+        cm = confusion_matrix(y_true_padded, y_pred_padded, labels=classes)
         
         # Plot confusion matrix
-        plt.figure(figsize=(16, 14))
+        plt.figure(figsize=(20, 18))
         
         # Normalize confusion matrix for better visualization
         row_sums = cm.sum(axis=1)[:, np.newaxis]
