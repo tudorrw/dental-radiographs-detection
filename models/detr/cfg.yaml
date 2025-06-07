@@ -1,5 +1,5 @@
 image_dir: dataset/origin
-csv_path: dataset/coco
+csv_path: dataset/coco/detr
 data_type: quadrant_enumeration 
 checkpoints_path: checkpoints/
 # Model parameters
