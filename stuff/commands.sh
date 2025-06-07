@@ -34,6 +34,12 @@ tensorboard --logdir=checkpoints/retinanet
 # to vizualize the results of the yolo, faster_rcnn models, run the following command:
 python -m models.visualize_results
 
+#cuda operators for dino
+cd models/dino/ops
+python setup.py build install
+# unit test (should see all checking is True)
+python test.py
+cd ../../..
 
 # commands for dino
 #train
@@ -50,7 +56,7 @@ python -m models.dino.main \
 # with 5 feature maps
 python -m models.dino.main \
 	-c models/dino/configs/DINO_5scale.py \
-	--output_dir checkpoints/dino/version_1 \
+	--output_dir checkpoints/dino/version_0 \
 	--pretrain_model_path checkpoints/dino/pretrained/checkpoint0031_5scale.pth \
 	--options dn_scalar=100 embed_init_tgt=TRUE \
 	dn_label_coef=1.0 dn_bbox_coef=1.0 use_ema=False \

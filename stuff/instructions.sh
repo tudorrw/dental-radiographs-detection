@@ -20,12 +20,59 @@ https://www.runpod.io/console/deploy
 scp -P <pid> -r <folder_to_move> root@<remoteip>:~/dental-radiographs-detection 
 scp -r root@<remoteip>:/workspace/dental-radiographs-detection/checkpoints/faster_rcnn/version_0 <folder_to_move>
 
+
 wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
 bash Miniconda3-latest-Linux-x86_64.sh
 pip install torch==2.6.0+cu124 torchvision==0.20.1 torchaudio --index-url https://download.pytorch.org/whl/cu124
 
-eval "$(/root/miniconda3/bin/conda shell.bash hook)"
-checkpoint = torch.load(args.resume, map_location="cpu")
+
+# checkpoint = torch.load(args.resume, map_location="cpu")
+# take stuff from the server workspace volume to the remote ip
+# make such that the workspace voule and the remote ip are linked
 ln -s /workspace/miniconda3 ~/miniconda3
 ln -s /workspace/dental-radiographs-detection ~/dental-radiographs-detection
 ln -s /workspace/.gitconfig ~/.gitconfig
+
+eval "$(/root/miniconda3/bin/conda shell.bash hook)"
+
+
+the dataset is in the following path:
+dataset/
+├── coco
+│   ├── detr
+│   │   ├── quadrant_enumeration_coco_test.json
+│   │   ├── quadrant_enumeration_coco_train.json
+│   │   └── quadrant_enumeration_coco_val.json
+│   ├── dino
+│   │   └── quadrant_enumeration
+│   │       ├── annotations
+│   │       │   ├── instances_train2017.json
+│   │       │   ├── instances_val2017.json
+│   │       │   └── instances_test2017.json
+│   │       ├── test2017 - (has images)
+│   │       ├── train2017 - (has images)
+│   │       ├── val2017 - (has images)
+│   │       └── rezerve
+├── origin
+│   └── quadrant_enumeration
+│       ├── xrays
+│       └── train_quadrant_enumeration.json
+├── pascal_voc
+│   └── quadrant_enumeration
+│       ├── quadrant_enumeration_voc_test.csv
+│       ├── quadrant_enumeration_voc_train.csv
+│       └── quadrant_enumeration_voc_val.csv
+├── validation_data
+└── yolo
+    └── classic
+        ├── test
+        │   ├── images
+        │   └── labels (txt files)
+        ├── val
+        │   ├── images
+        │   └── labels (txt files)
+        └── train
+            ├── images
+            └── labels (txt files)
+
+

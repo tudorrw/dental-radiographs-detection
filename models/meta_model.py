@@ -69,8 +69,8 @@ def ensemble_predict(rcnn_model, retinanet_model, yolo_model, dino_model, postpr
 
             # (A) Faster R-CNN
             rcnn_pred = rcnn_model([img_tensor])[0]
-            rcnn_boxes  = rcnn_pred["boxes"].cpu().numpy()
             rcnn_scores = rcnn_pred["scores"].cpu().numpy()
+            rcnn_boxes  = rcnn_pred["boxes"].cpu().numpy()
             rcnn_labels = rcnn_pred["labels"].cpu().numpy()
 
             # (B) RetinaNet
@@ -145,9 +145,9 @@ def ensemble_predict(rcnn_model, retinanet_model, yolo_model, dino_model, postpr
             scores_list = [rcnn_scores, ret_scores, dino_scores]
             labels_list = [rcnn_labels, ret_labels, dino_labels]
             
-            # boxes_list = [dino_boxes_norm]
-            # scores_list = [dino_scores]
-            # labels_list = [dino_labels]
+            # boxes_list = [rcnn_boxes_norm, ret_boxes_norm]
+            # scores_list = [rcnn_scores, ret_scores]
+            # labels_list = [rcnn_labels, ret_labels]
     
             if sum([len(b) for b in boxes_list]) == 0:
                 # Update metric with empty pred
@@ -165,10 +165,11 @@ def ensemble_predict(rcnn_model, retinanet_model, yolo_model, dino_model, postpr
                 scores_list,
                 labels_list,
                 # weights=[7.5, 6], # or e.g. [2,1,1] if you trust RCNN more
-                weights=[1.15,1.5,2.4],
+                weights=[1.15,2,2.4],
+                # weights=[1],
                 # weights=[1.15, 2],
-                iou_thr=0.6,
-                conf_type="avg",
+                iou_thr=0.55,
+                conf_type="max",
             )
 
             # Denormalize back to pixels
@@ -201,7 +202,7 @@ def ensemble_predict(rcnn_model, retinanet_model, yolo_model, dino_model, postpr
     computed = map_metric.compute()
 
 
-    keys_to_show = ["map", "map_50", "map_75", "map_large", "map_medium"]
+    keys_to_show = ["map", "map_50", "map_75", "mar_100"]
     print("┡━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━┩")
     for k in keys_to_show:
         val = computed.get(k, None)
