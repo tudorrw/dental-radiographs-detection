@@ -145,9 +145,9 @@ def ensemble_predict(rcnn_model, retinanet_model, yolo_model, dino_model, postpr
             scores_list = [rcnn_scores, ret_scores, dino_scores]
             labels_list = [rcnn_labels, ret_labels, dino_labels]
             
-            # boxes_list = [rcnn_boxes_norm, ret_boxes_norm]
-            # scores_list = [rcnn_scores, ret_scores]
-            # labels_list = [rcnn_labels, ret_labels]
+            # boxes_list = [ret_boxes_norm, dino_boxes_norm]
+            # scores_list = [ret_scores, dino_scores]
+            # labels_list = [ret_labels, dino_labels]
     
             if sum([len(b) for b in boxes_list]) == 0:
                 # Update metric with empty pred
@@ -164,12 +164,13 @@ def ensemble_predict(rcnn_model, retinanet_model, yolo_model, dino_model, postpr
                 boxes_list,
                 scores_list,
                 labels_list,
-                # weights=[7.5, 6], # or e.g. [2,1,1] if you trust RCNN more
-                weights=[1.15,2,2.4],
-                # weights=[1],
-                # weights=[1.15, 2],
-                iou_thr=0.55,
-                conf_type="max",
+                weights=[1.2,1.05,1.6], iou_thr=0.65, conf_type="max", #faster rcnn + retinanet + dino
+                # weights=[1.15, 2],iou_thr=0.6, conf_type="avg" #faster rcnn + retinanet,
+                # weights=[1.25, 1.65],iou_thr=0.65,conf_type="max" #faster rcnn + dino,
+                # weights=[1.25, 1.65],iou_thr=0.65,conf_type="max" #retinanet + dino,
+                # weights=[1], - # models alone
+                
+                
             )
 
             # Denormalize back to pixels
@@ -220,6 +221,6 @@ if __name__ == '__main__':
     dataset_type="test"
     )
 
-    test_loader = DataLoader(test_dataset, batch_size=2, num_workers=0, pin_memory=True, collate_fn=TeethDataset.collate_fn)
+    test_loader = DataLoader(test_dataset, batch_size=2, num_workers=10, pin_memory=True, collate_fn=TeethDataset.collate_fn)
     ensemble_predict(rcnn_model, retinanet_model, None, dino_model, postprocessors, test_loader)
 
