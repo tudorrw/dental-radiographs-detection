@@ -75,3 +75,15 @@ def output_json(image_str, boxes, scores, labels):
             "labels": labels
         }
     }
+    
+    
+def postprocess(image, preds):
+    boxes = preds["boxes"]
+    scores = preds["scores"]
+    labels = preds["labels"]
+    predicted_quadrants, predicted_teeth, decoded_fdi_predicted_labels = decode_teeth_numbers(labels)
+    
+    clahe_pil = clahe(image)
+    img_str = draw_boxes(clahe_pil, boxes, predicted_quadrants, predicted_teeth)
+    return output_json(img_str, boxes, scores, decoded_fdi_predicted_labels)
+

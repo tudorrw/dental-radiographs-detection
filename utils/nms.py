@@ -3,12 +3,14 @@ import numpy as np
 from torchvision.ops import nms, box_iou
 
 
+
+
 class UniqueClassNMSProcessor:
     """
     Non-Maximum Suppression processor that ensures each class is assigned to at most one box.
     Adapted from the original NMS implementation in the project.
     """
-    def __init__(self, iou_threshold=0.5):
+    def __init__(self, iou_threshold):
         self.iou_threshold = iou_threshold
  
     def __call__(self, output):
@@ -71,7 +73,7 @@ class ClassAgnosticNMS:
     This is particularly helpful for tooth detection models like RetinaNet where
     overlapping boxes with different class labels can be problematic.
     """
-    def __init__(self, iou_threshold=0.5, score_threshold=0.3):
+    def __init__(self, iou_threshold, score_threshold):
         self.iou_threshold = iou_threshold
         self.score_threshold = score_threshold
     
@@ -145,7 +147,7 @@ class ClassAgnosticNMS:
 
 
 class CombinedNMS:
-    def __init__(self, iou_threshold=0.5, score_threshold=0.3):
+    def __init__(self, iou_threshold, score_threshold):
         self.agnostic_nms = ClassAgnosticNMS(iou_threshold=iou_threshold, score_threshold=score_threshold)
         self.unique_nms = UniqueClassNMSProcessor(iou_threshold=iou_threshold)
 
@@ -156,4 +158,5 @@ class CombinedNMS:
         # all other detection boxes with significant overlap to that box are filtered out
         filtered_final = self.unique_nms(filtered_output)
         return filtered_final
+    
     

@@ -1,19 +1,14 @@
 import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-import io
-import cv2
-import base64
 import torch
 import uvicorn
 import numpy as np
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from PIL import Image, ImageDraw, ImageFont
-
-from utils.get_models import FineTunedModels
-from utils.nms import UniqueClassNMSProcessor, CombinedNMS  # If you're using class-wise NMS
-from api.utils import clahe, clahe_for_dino, decode_teeth_numbers, draw_boxes, read_convert_image, output_json
-import models.dino.datasets.transforms as DT
+from utils.wbf import weighted_boxes_fusion
+from utils.nms import UniqueClassNMSProcessor, CombinedNMS, ClassAgnosticNMS # If you're using class-wise NMS
+from api.utils import read_convert_image, postprocess
+from api.predictions import predict_faster_rcnn, predict_retinanet, predict_dino, predict_yolo
 
 #for decoding the FDI numbers
 
@@ -28,13 +23,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Example if you're applying class-wise NMS
+
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-models = FineTunedModels(device)
-rcnn_model = models.get_faster_rcnn_model()
 
-rcnn_nms_processor = UniqueClassNMSProcessor(iou_threshold=0.5) 
+
+unique_class_nms = UniqueClassNMSProcessor(iou_threshold=0.55) 
+class_agnostic_nms = ClassAgnosticNMS(iou_threshold=0.55, score_threshold=0.5)
+combined_nms = CombinedNMS(iou_threshold=0.55, score_threshold=0.5)
+combined_nms_2 = CombinedNMS(iou_threshold=0.55, score_threshold=0.3)
 
 @app.post("/detections/faster-rcnn")
 async def detect_teeth_faster_rcnn(file: UploadFile = File(...)):
@@ -47,63 +44,23 @@ async def detect_teeth_faster_rcnn(file: UploadFile = File(...)):
       - Returns the final bounding boxes + scores + FDI labels + PNG image
     """
     image = await read_convert_image(file)
-
-    image_tensor = torch.Tensor(np.array(image)).permute(2, 0, 1) / 255.0
-    image_tensor = image_tensor.to(device)
-
-    with torch.no_grad():
-        prediction = rcnn_model([image_tensor])[0]
-
-    boxes_cpu = prediction["boxes"].cpu().numpy()
-    scores_cpu = prediction["scores"].cpu().numpy()
-    labels_cpu = prediction["labels"].cpu().numpy()
-
-    cpu_dict = {
-        "boxes": boxes_cpu,
-        "scores": scores_cpu,
-        "labels": labels_cpu
-    }
-    filtered = rcnn_nms_processor(cpu_dict)
-
-    final_boxes = filtered["boxes"]
-    final_scores = filtered["scores"]
-    final_labels = filtered["labels"]
+    cpu_dict = predict_faster_rcnn(image)
+    filtered = unique_class_nms(cpu_dict)
+    
+    return postprocess(image, filtered)
 
 
-    #decode the numeric indices to get FDI numbering
-    predicted_quadrants, predicted_teeth, decoded_fdi_predicted_labels = decode_teeth_numbers(final_labels)
 
-    #draw bounding boxes on a copy of the original image
-    clahe_pil = clahe(image)
-    img_str = draw_boxes(clahe_pil, final_boxes, predicted_quadrants, predicted_teeth)
-
-    # 9) Return the final results
-    return output_json(img_str, final_boxes, final_scores, decoded_fdi_predicted_labels)
-
-
-yolo_model = models.get_yolo_model()
-
-@app.post("/detections/yolov11")
+@app.post("/detections/yolo")
 async def detect_teeth_yolov11(file: UploadFile = File(...)):
     image = await read_convert_image(file)
-    results = yolo_model.predict(image, conf=0.5)[0]
+    cpu_dict = predict_yolo(image)
+    filtered = combined_nms(cpu_dict)
 
-    boxes_cpu = results.boxes.xyxy.cpu().numpy()
-    scores_cpu = results.boxes.conf.cpu().numpy()
-    labels_cpu = results.boxes.cls.cpu().numpy()
-
-
-    predicted_quadrants, predicted_teeth, decoded_fdi_predicted_labels = decode_teeth_numbers(labels_cpu)
-    
-
-    clahe_pil = clahe(image)
-    img_str = draw_boxes(clahe_pil, boxes_cpu, predicted_quadrants, predicted_teeth)
-    return output_json(img_str, boxes_cpu, scores_cpu, decoded_fdi_predicted_labels)
+    return postprocess(image, filtered)
 
 
 
-retinanet_model = models.get_retinanet_model()
-retinanet_nms_processor = CombinedNMS(iou_threshold=0.5, score_threshold=0.3)
 
 @app.post("/detections/retinanet")
 async def detect_teeth_retinanet(file: UploadFile = File(...)):
@@ -117,91 +74,86 @@ async def detect_teeth_retinanet(file: UploadFile = File(...)):
     """
     image = await read_convert_image(file)
 
-    image_tensor = torch.Tensor(np.array(image)).permute(2, 0, 1) / 255.0
-    image_tensor = image_tensor.to(device)
+    cpu_dict = predict_retinanet(image)
+    filtered = combined_nms(cpu_dict)
 
-    with torch.no_grad():
-        prediction = retinanet_model([image_tensor])[0]
-
-    boxes_cpu = prediction["boxes"].cpu().numpy()
-    scores_cpu = prediction["scores"].cpu().numpy()
-    labels_cpu = prediction["labels"].cpu().numpy()
-
-    cpu_dict = {
-        "boxes": boxes_cpu,
-        "scores": scores_cpu,
-        "labels": labels_cpu
-    }
-    filtered = retinanet_nms_processor(cpu_dict)
-
-    final_boxes = filtered["boxes"]
-    final_scores = filtered["scores"]
-    final_labels = filtered["labels"]
+    return postprocess(image, filtered)
 
 
-    #decode the numeric indices to get FDI numbering
-    predicted_quadrants, predicted_teeth, decoded_fdi_predicted_labels = decode_teeth_numbers(final_labels)
-
-    #draw bounding boxes on a copy of the original image
-    clahe_pil = clahe(image)
-    img_str = draw_boxes(clahe_pil, final_boxes, predicted_quadrants, predicted_teeth)
-
-    # 9) Return the final results
-    return output_json(img_str, final_boxes, final_scores, decoded_fdi_predicted_labels)
 
 
-dino_model, postprocessors = models.get_dino_model()
 
 @app.post("/detections/dino")
 async def detect_teeth_dino(file: UploadFile = File(...)):
     image = await read_convert_image(file)
-    
-    image_np = np.array(image)
-    image_shape = image_np.shape[:2]
-    
-    transforms = DT.Compose([
-        DT.RandomResize([800], max_size=1333),
-        DT.ToTensor(),
-        DT.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ])
-    image_tensor = image.copy()
-    image_tensor, _ = transforms(image_tensor, None)
-    if device == "cuda":
-        image_tensor = image_tensor.cuda()
-            
-    outputs = dino_model(image_tensor.unsqueeze(0))
-    scale = torch.tensor([image_shape])
-    if device == "cuda":
-        scale = scale.cuda()
-            
-    output = postprocessors["bbox"](outputs, scale)[0]
+    cpu_dict = predict_dino(image)
+    filtered = combined_nms_2(cpu_dict)
 
-    # Post-process predictions
-    scores = output["scores"]
-    labels = output["labels"]
-    boxes = output["boxes"]
+
+    return postprocess(image, filtered)
+
+
+@app.post("/detections/meta-model")
+async def detect_teeth_meta_model(file: UploadFile = File(...)):
+    image = await read_convert_image(file)
+    image_np = np.array(image)
+    h, w = image_np.shape[:2]  # Get image height and width
+
+    # Get predictions from all models
+    rcnn = predict_faster_rcnn(image)
+    retinanet = predict_retinanet(image)
+    dino = predict_dino(image)
     
-    # Filter by confidence threshold
-    select_mask = scores > 0.3
-    scores_cpu = scores[select_mask].cpu().numpy()
-    labels_cpu = (labels[select_mask] + 1).cpu().numpy()  # Increment labels by 1
-    boxes_cpu = boxes[select_mask].cpu().numpy()
+    # Normalize boxes by image dimensions
+    def normalize_boxes(boxes):
+        return np.array([
+            [box[0]/w, box[1]/h, box[2]/w, box[3]/h] for box in boxes
+        ])
     
-    print(scores_cpu)
-    print(labels_cpu)
-    print(boxes_cpu)
+    # Normalize boxes from each model
+    rcnn_boxes = normalize_boxes(rcnn["boxes"]) if len(rcnn["boxes"]) > 0 else np.empty((0,4))
+    retinanet_boxes = normalize_boxes(retinanet["boxes"]) if len(retinanet["boxes"]) > 0 else np.empty((0,4))
+    dino_boxes = normalize_boxes(dino["boxes"]) if len(dino["boxes"]) > 0 else np.empty((0,4))
     
-    cpu_dict = {
+    # Prepare lists for WBF
+    boxes_list = [rcnn_boxes, retinanet_boxes, dino_boxes]
+    scores_list = [rcnn["scores"], retinanet["scores"], dino["scores"]]
+    labels_list = [rcnn["labels"], retinanet["labels"], dino["labels"]]
+    
+    # Weights for each model (can be adjusted based on model performance)
+    weights = [2, 1.65, 1.05]
+    
+    # Apply WBF
+    boxes, scores, labels = weighted_boxes_fusion(
+        boxes_list,
+        scores_list,
+        labels_list,
+        weights=weights,
+        iou_thr=0.55,
+        conf_type="avg",
+        skip_box_thr=0.5
+    )
+    
+    # Filter boxes with scores below 0.55
+    mask = scores >= 0.4
+    boxes = boxes[mask]
+    scores = scores[mask]
+    labels = labels[mask]
+    
+    # Denormalize boxes back to original image coordinates
+    denormalized_boxes = np.array([
+        [box[0]*w, box[1]*h, box[2]*w, box[3]*h] for box in boxes
+    ])
+    
+    combined_preds = {
+        "boxes": denormalized_boxes,
         "scores": scores,
-        "labels": labels,
-        "boxes": boxes
+        "labels": labels
     }
     
-    predicted_quadrants, predicted_teeth, decoded_fdi_predicted_labels = decode_teeth_numbers(labels_cpu)
-    
-    clahe_pil = clahe(image)
-    img_str = draw_boxes(clahe_pil, boxes_cpu, predicted_quadrants, predicted_teeth)
-    return output_json(img_str, boxes_cpu, scores_cpu, decoded_fdi_predicted_labels)
+    filtered = combined_nms(combined_preds)
+    return postprocess(image, filtered)
+
 
 if __name__ == "__main__":
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)

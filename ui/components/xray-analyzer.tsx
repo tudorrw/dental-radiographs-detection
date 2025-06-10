@@ -21,8 +21,8 @@ export default function XrayAnalyzer() {
   const [activeTab, setActiveTab] = useState<"original" | "processed">("original")
 
   const [selectedModel, setSelectedModel] = useState<string>("faster-rcnn")
-  const [models, setModels] = useState<string[]>(["faster-rcnn", "yolov11", "retinanet", "dino"])
-  const [modelsAsString, setModelsAsString] = useState<string[]>(["Faster-RCNN", "YOLOv11", "RetinaNet", "Dino"])
+  const [models, setModels] = useState<string[]>(["faster-rcnn", "retinanet", "dino", "meta-model"])
+  const [modelsAsString, setModelsAsString] = useState<string[]>(["Faster-RCNN", "RetinaNet", "DINO", "Meta-Model"])
   const [selectedModelName, setSelectedModelName] = useState<string>(modelsAsString[0])
 
   // Store detection data (or null if not processed yet)
@@ -423,7 +423,7 @@ export default function XrayAnalyzer() {
                           )}
                         >
                           {/* Meta-Model */}
-                          {modelsAsString[3]} (Dino)
+                          {modelsAsString[3]} (All Models Combined)
                         </button>
                       </div>
                     </div>
@@ -472,12 +472,12 @@ export default function XrayAnalyzer() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-black">X-Ray Analysis</h2>
             <div className="flex gap-2">
-              {processedImage && (
+              {/* {processedImage && (
                 <Button variant="outline" size="sm">
                   <Download className="h-4 w-4 mr-2" />
                   Export
                 </Button>
-              )}
+              )} */}
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
