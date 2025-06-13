@@ -1,0 +1,88 @@
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+# activate conda env
+eval "$(/root/miniconda3/bin/conda shell.bash hook)"
+conda activate dental-dl
+
+# split the data
+python -m data.utils.train_test_val_split
+python -m data.utils.train_test_split_for_kfolds
+
+# commands for faster rcnn
+python -m models.faster_rcnn.scripts.visualize_ground_truth
+python -m models.faster_rcnn.scripts.train
+python -m models.faster_rcnn.scripts.test
+python -m models.faster_rcnn.scripts.predict
+python -m models.faster_rcnn.params
+tensorboard --logdir=checkpoints/faster_rcnn
+
+# commands for detr
+python -m models.detr.scripts.visualize_ground_truth
+python -m models.detr.scripts.train
+tensorboard --logdir=checkpoints/detr
+
+# commands for yolo 11
+python -m models.yolov11.scripts.train
+python -m models.yolov11.scripts.val
+python -m models.yolov11.scripts.test
+tensorboard --logdir=runs/detect/train
+
+# commands for retinanet
+python -m models.retinanet.scripts.train
+python -m models.retinanet.params
+tensorboard --logdir=checkpoints/retinanet
+
+# to vizualize the results of the yolo, faster_rcnn models, run the following command:
+python -m models.visualize_results
+
+#cuda operators for dino
+cd models/dino/ops
+python setup.py build install
+# unit test (should see all checking is True)
+python test.py
+cd ../../..
+
+# commands for dino
+#train
+# with 4 feature maps
+python -m models.dino.main \
+	-c models/dino/configs/DINO_4scale.py \
+	--output_dir checkpoints/dino/version_0 \
+	--pretrain_model_path checkpoints/dino/pretrained/checkpoint0033_4scale.pth \
+	--options dn_scalar=100 embed_init_tgt=TRUE \
+	dn_label_coef=1.0 dn_bbox_coef=1.0 use_ema=False \
+	dn_box_noise_scale=1.0 \
+    --finetune_ignore label_enc.weight class_embed
+
+# with 5 feature maps
+python -m models.dino.main \
+	-c models/dino/configs/DINO_5scale.py \
+	--output_dir checkpoints/dino/version_0 \
+	--pretrain_model_path checkpoints/dino/pretrained/checkpoint0031_5scale.pth \
+	--options dn_scalar=100 embed_init_tgt=TRUE \
+	dn_label_coef=1.0 dn_bbox_coef=1.0 use_ema=False \
+	dn_box_noise_scale=1.0 \
+    --finetune_ignore label_enc.weight class_embed
+
+
+#eval
+python -m models.dino.main \
+  --output_dir logs/DINO/R50-MS4-%j \
+	-c models/dino/configs/DINO_4scale.py \
+	--eval --resume checkpoints/dino/version_1/checkpoint0027.pth \
+	--options dn_scalar=100 embed_init_tgt=TRUE \
+	dn_label_coef=1.0 dn_bbox_coef=1.0 use_ema=False \
+	dn_box_noise_scale=1.0
+
+
+tensorboard --logdir=checkpoints/dino
+
+
+python -m models.meta_model
+#utils
+# run frontend
+cd ui
+npm run dev
+
+# run backend
+uvicorn api.app:app --reload
+
