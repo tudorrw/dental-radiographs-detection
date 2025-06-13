@@ -33,11 +33,11 @@ Below are screenshots of the application in action:
 
 #### 1. Uploading an X-ray and selecting a detection model
 
-![Frontend Screenshot 1](frontend1.png)
+![Frontend Screenshot 1](stuff/frontend1.png)
 
 #### 2. Viewing processed analysis with bounding boxes and tooth chart
 
-![Frontend Screenshot 2](frontend2.png)
+![Frontend Screenshot 2](stuf/frontend2.png)
 
 ## Technical Details
 
