@@ -37,7 +37,7 @@ Below are screenshots of the application in action:
 
 #### 2. Viewing processed analysis with bounding boxes and tooth chart
 
-![Frontend Screenshot 2](stuf/frontend2.png)
+![Frontend Screenshot 2](stuff/frontend2.png)
 
 ## Technical Details
 
